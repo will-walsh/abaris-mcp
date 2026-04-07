@@ -1,0 +1,15 @@
+# config/routing.yaml
+# Namespace: data["routing"] / data.routing (OPA)
+# Owner: Platform / Infra team
+# Requires restart to change.
+
+routes:
+  - prefix: github
+    backend_uri: http://github-mcp-server:8080
+
+assertion:
+  issuer: https://abaris.example.com
+  audience: https://github-mcp-server.internal
+  ttl: 60s
+  kms_key_arn: arn:aws:kms:us-east-1:ACCOUNT_ID:key/mrk-REPLACE
+  signing_key_id: abaris-2024-01

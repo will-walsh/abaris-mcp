@@ -1,0 +1,10 @@
+# config/policies/developers.yaml
+# Namespace: data["policies/developers"] / data.policies.developers (OPA)
+# Owner: Developer team
+# Hot-reloaded — no restart required.
+
+policies:
+  - group: developers
+    reduced_scope:
+      allowed_tools:
+        - "github/*"

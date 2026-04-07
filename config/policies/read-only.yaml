@@ -1,0 +1,15 @@
+# config/policies/read-only.yaml
+# Namespace: data["policies/read-only"] / data.policies.read-only (OPA)
+# Owner: Platform / Security team
+# Hot-reloaded — no restart required.
+
+policies:
+  - group: read-only
+    reduced_scope:
+      allowed_tools:
+        - "github/get-*"
+        - "github/list-*"
+      denied_tools:
+        - "github/delete-*"
+        - "github/create-*"
+        - "github/update-*"

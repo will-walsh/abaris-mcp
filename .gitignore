@@ -1,0 +1,44 @@
+# Binaries
+abaris
+/bin/
+*.exe
+
+# Build output
+dist/
+
+# Go test cache and coverage
+*.test
+*.out
+coverage.html
+
+# Environment and secrets — never commit these
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# AWS credentials
+.aws/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Local config overrides — use config/ for version-controlled config
+config/identity.local.yaml
+config/routing.local.yaml
+
+# BadgerDB local dev token store
+badger/
+*.vlog
+*.sst
+MANIFEST
+
+# Test fixtures with real credentials
+testdata/secrets/

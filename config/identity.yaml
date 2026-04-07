@@ -1,0 +1,21 @@
+# config/identity.yaml
+# Namespace: data["identity"] / data.identity (OPA)
+# Owner: Platform / Security team
+# Requires restart to change.
+#
+# Cognito User Pool: us-east-1_rJETkEEyh
+# Hosted UI domain: us-east-1rjetkeeyh.auth.us-east-1.amazoncognito.com
+# App Client: abaris-test-idp (6smfttkp2gbfgh4thoh5jeq9og)
+#
+# NOTE: Cognito emits group membership in the "cognito:groups" claim.
+# The OIDCAdapter is configured to read from "cognito:groups" directly.
+# No Pre Token Generation Lambda or claim remapping is required.
+
+identity_providers:
+  - name: cognito-oidc
+    type: oidc
+    discovery_url: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/openid-configuration
+    jwks_endpoint: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/jwks.json
+    client_id: 6smfttkp2gbfgh4thoh5jeq9og
+    audience: 6smfttkp2gbfgh4thoh5jeq9og
+    groups_claim: "cognito:groups"

@@ -144,57 +144,57 @@ Incremental build of the Abaris identity-aware MCP Broker in Go, following Hexag
   - [x] 8.5 Implement graceful shutdown: handle `SIGTERM` and `SIGINT`, drain in-flight requests within configurable timeout, then exit cleanly; emit all log output to stdout
     - _Requirements: 9.3, 9.4_
 
-- [-] 9. Phase 8 — Property-Based & Unit Tests
+- [x] 9. Phase 8 — Property-Based & Unit Tests
   - [x] 9.1 Ensure all 36 correctness properties have a corresponding `gopter` property test (Properties 1–36); each test runs ≥ 100 iterations and is annotated with its property number and requirements clause
     - _Requirements: 8.6_
-  - [ ] 9.2 Write unit tests for all adapters: OIDC HTTP error mapping (Req 2.7), SAML parse error mapping, config validation (missing fields, invalid URLs, unrecognised provider type), JSON-RPC error code mappings
+  - [x] 9.2 Write unit tests for all adapters: OIDC HTTP error mapping (Req 2.7), SAML parse error mapping, config validation (missing fields, invalid URLs, unrecognised provider type), JSON-RPC error code mappings
     - _Requirements: 2.7, 5.6, 1.5_
-  - [ ] 9.3 Write mock KMS client unit tests for `KMSMinter`: correct JWT construction, claim values, error propagation on KMS failure, no private key in memory
+  - [x] 9.3 Write mock KMS client unit tests for `KMSMinter`: correct JWT construction, claim values, error propagation on KMS failure, no private key in memory
     - _Requirements: 4.4, 7.2_
-  - [ ] 9.4 Add compile-time interface satisfaction checks for all adapters: `OIDCAdapter`, `SAMLAdapter`, `OPAPolicyAdapter`, `KMSMinter`
+  - [x] 9.4 Add compile-time interface satisfaction checks for all adapters: `OIDCAdapter`, `SAMLAdapter`, `OPAPolicyAdapter`, `KMSMinter`
     - _Requirements: 8.3, 8.5_
 
-- [ ] 10. Phase 9 — Integration & Smoke Tests
-  - [ ] 10.1 Write integration tests (build tag `integration`) for SSE and Stdio transport acceptance
+- [x] 10. Phase 9 — Integration & Smoke Tests
+  - [x] 10.1 Write integration tests (build tag `integration`) for SSE and Stdio transport acceptance
     - _Requirements: 1.1_
-  - [ ] 10.2 Write integration tests for OIDC adapter end-to-end with a test OIDC provider
+  - [x] 10.2 Write integration tests for OIDC adapter end-to-end with a test OIDC provider
     - _Requirements: 2.2, 2.4_
-  - [ ] 10.3 Write integration tests for SAML adapter end-to-end with a test IdP
+  - [x] 10.3 Write integration tests for SAML adapter end-to-end with a test IdP
     - _Requirements: 2.3, 2.4_
-  - [ ] 10.4 Write integration tests for KMS signing end-to-end against LocalStack: verify produced JWT signature validates against the public key from `kms:GetPublicKey`
+  - [x] 10.4 Write integration tests for KMS signing end-to-end against LocalStack: verify produced JWT signature validates against the public key from `kms:GetPublicKey`
     - _Requirements: 4.4, 7.2_
-  - [ ] 10.5 Write integration tests for OPA bundle loading and hot-reload
+  - [x] 10.5 Write integration tests for OPA bundle loading and hot-reload
     - _Requirements: 3.2, 3.6_
-  - [ ] 10.6 Write integration tests for health check endpoint and graceful shutdown under SIGTERM
+  - [x] 10.6 Write integration tests for health check endpoint and graceful shutdown under SIGTERM
     - _Requirements: 9.1, 9.2, 9.4_
-  - [ ] 10.7 Write smoke tests: `go build` succeeds, valid Config_Directory fixture loads without error, slog JSON output format, log level env var respected, `go vet` / `staticcheck` pass
+  - [x] 10.7 Write smoke tests: `go build` succeeds, valid Config_Directory fixture loads without error, slog JSON output format, log level env var respected, `go vet` / `staticcheck` pass
     - _Requirements: 5.1, 6.1, 6.5_
 
-- [ ] 11. Checkpoint — Ensure all tests pass
+- [x] 11. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Phase 11 — OBO Proxy (Stateful On-Behalf-Of)
-  - [ ] 12.1 Add `TokenPair`, `TokenStoreConfig`, `SecondaryProviderConfig` types to `internal/domain/types.go`; add `OBOProvider string` field to `RouteEntry`; add `TokenStore` interface to `internal/domain/interfaces.go`; add `ErrNotConnected` sentinel error to `internal/domain/errors.go`
+- [x] 12. Phase 11 — OBO Proxy (Stateful On-Behalf-Of)
+  - [x] 12.1 Add `TokenPair`, `TokenStoreConfig`, `SecondaryProviderConfig` types to `internal/domain/types.go`; add `OBOProvider string` field to `RouteEntry`; add `TokenStore` interface to `internal/domain/interfaces.go`; add `ErrNotConnected` sentinel error to `internal/domain/errors.go`
     - _Requirements: 11.1, 10.1, 12.4_
-  - [ ] 12.2 Implement `EncryptedTokenStore` wrapper in `internal/auth/registry.go`: KMS envelope encryption using `kms:GenerateDataKey` on Save and `kms:Decrypt` on Get; define `KMSClient` interface for testability; add compile-time checks `var _ domain.TokenStore = (*EncryptedTokenStore)(nil)`
+  - [x] 12.2 Implement `EncryptedTokenStore` wrapper in `internal/auth/registry.go`: KMS envelope encryption using `kms:GenerateDataKey` on Save and `kms:Decrypt` on Get; define `KMSClient` interface for testability; add compile-time checks `var _ domain.TokenStore = (*EncryptedTokenStore)(nil)`
     - _Requirements: 11.3, 11.4, 11.5_
-  - [ ] 12.3 Implement `DynamoDBTokenStore` in `internal/auth/registry_dynamo.go`: partition key `user_id`, sort key `provider`; define `DynamoDBClient` interface; add compile-time check `var _ domain.TokenStore = (*DynamoDBTokenStore)(nil)`
+  - [x] 12.3 Implement `DynamoDBTokenStore` in `internal/auth/registry_dynamo.go`: partition key `user_id`, sort key `provider`; define `DynamoDBClient` interface; add compile-time check `var _ domain.TokenStore = (*DynamoDBTokenStore)(nil)`
     - _Requirements: 11.6, 15.2_
-  - [ ] 12.4 Implement `BadgerTokenStore` in `internal/auth/registry_badger.go`: composite key `{userID}:{provider}`; add compile-time check `var _ domain.TokenStore = (*BadgerTokenStore)(nil)`
+  - [x] 12.4 Implement `BadgerTokenStore` in `internal/auth/registry_badger.go`: composite key `{userID}:{provider}`; add compile-time check `var _ domain.TokenStore = (*BadgerTokenStore)(nil)`
     - _Requirements: 11.6, 15.3_
-  - [ ] 12.5 Extend `config.Loader` to parse `secondary_providers` and `token_store` sections from `config/identity.yaml`; resolve each `client_secret_arn` from Secrets Manager at startup; fatal log + non-zero exit on any missing secret or invalid config
+  - [x] 12.5 Extend `config.Loader` to parse `secondary_providers` and `token_store` sections from `config/identity.yaml`; resolve each `client_secret_arn` from Secrets Manager at startup; fatal log + non-zero exit on any missing secret or invalid config
     - _Requirements: 10.1, 10.2, 10.3, 15.1, 15.4_
-  - [ ] 12.6 Implement `OBOPipeline` in `internal/proxy/obo_pipeline.go`: Step A (Cognito authn + silent refresh via stored Cognito refresh token) → Step B (OPA authz) → Step C (UAT retrieval from TokenStore; return `-32001` if absent) → Step D (forward via `RefreshTransport` with `Authorization: Bearer <UAT>` + `X-Abaris-Assertion`)
+  - [x] 12.6 Implement `OBOPipeline` in `internal/proxy/obo_pipeline.go`: Step A (Cognito authn + silent refresh via stored Cognito refresh token) → Step B (OPA authz) → Step C (UAT retrieval from TokenStore; return `-32001` if absent) → Step D (forward via `RefreshTransport` with `Authorization: Bearer <UAT>` + `X-Abaris-Assertion`)
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 14.1, 14.2_
-  - [ ] 12.7 Implement `RefreshTransport` in `internal/proxy/refresh_transport.go`: wraps `http.RoundTripper`; on HTTP 401 calls `TokenRefresher.Refresh` exactly once, saves new `TokenPair` to `TokenStore`, retries with new access token; deletes stale pair and returns `ErrServiceUnavailable` if refresh fails; add compile-time check `var _ http.RoundTripper = (*RefreshTransport)(nil)`
+  - [x] 12.7 Implement `RefreshTransport` in `internal/proxy/refresh_transport.go`: wraps `http.RoundTripper`; on HTTP 401 calls `TokenRefresher.Refresh` exactly once, saves new `TokenPair` to `TokenStore`, retries with new access token; deletes stale pair and returns `ErrServiceUnavailable` if refresh fails; add compile-time check `var _ http.RoundTripper = (*RefreshTransport)(nil)`
     - _Requirements: 12.5, 12.6, 12.8_
-  - [ ] 12.8 Implement `OAuth2TokenRefresher` in `internal/proxy/refresh_transport.go`: exchanges stored refresh token with Secondary_Provider token endpoint using `golang.org/x/oauth2`; add compile-time check `var _ TokenRefresher = (*OAuth2TokenRefresher)(nil)`
+  - [x] 12.8 Implement `OAuth2TokenRefresher` in `internal/proxy/refresh_transport.go`: exchanges stored refresh token with Secondary_Provider token endpoint using `golang.org/x/oauth2`; add compile-time check `var _ TokenRefresher = (*OAuth2TokenRefresher)(nil)`
     - _Requirements: 12.5_
-  - [ ] 12.9 Implement `ConnectHandler` in `internal/proxy/connect_handler.go`: `GET /connect/{provider}` validates Cognito token → mints HMAC-SHA256 state token (key from Secrets Manager) → redirects to OAuth2 auth URL; `GET /connect/{provider}/callback` verifies state → exchanges code → saves encrypted `TokenPair`; return 404 for unknown providers, 401 for missing Cognito token, 400 for invalid/expired state, 502 for failed code exchange
+  - [x] 12.9 Implement `ConnectHandler` in `internal/proxy/connect_handler.go`: `GET /connect/{provider}` validates Cognito token → mints HMAC-SHA256 state token (key from Secrets Manager) → redirects to OAuth2 auth URL; `GET /connect/{provider}/callback` verifies state → exchanges code → saves encrypted `TokenPair`; return 404 for unknown providers, 401 for missing Cognito token, 400 for invalid/expired state, 502 for failed code exchange
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7_
-  - [ ] 12.10 Update `Broker` in `internal/proxy/` to dispatch `call_tool` to `OBOPipeline` when `RouteEntry.OBOProvider` is non-empty; standard service-credentials path unchanged for routes without `obo_provider`
+  - [x] 12.10 Update `Broker` in `internal/proxy/` to dispatch `call_tool` to `OBOPipeline` when `RouteEntry.OBOProvider` is non-empty; standard service-credentials path unchanged for routes without `obo_provider`
     - _Requirements: 12.9_
-  - [ ] 12.11 Write property tests for OBO components (Properties 28–36) using `gopter`
+  - [x] 12.11 Write property tests for OBO components (Properties 28–36) using `gopter`
     - **Property 28: TokenStore round-trip with encryption verification** — Validates: Requirements 11.3, 11.8
     - **Property 29: Secondary provider config validation rejects all invalid inputs** — Validates: Requirements 10.3
     - **Property 30: OBO pipeline header injection and Cognito token exclusion** — Validates: Requirements 12.7, 14.1, 14.2, 14.4
@@ -204,27 +204,27 @@ Incremental build of the Abaris identity-aware MCP Broker in Go, following Hexag
     - **Property 34: OBO pipeline activated only for routes with obo_provider** — Validates: Requirements 12.9
     - **Property 35: X-Abaris-Assertion sub claim equals IdentityContext.UserID** — Validates: Requirements 14.6
     - **Property 36: Token operations never log plaintext token values** — Validates: Requirements 11.7, 13.8
-  - [ ] 12.12 Write unit tests for OBO components: `EncryptedTokenStore` with mock KMS errors, `DynamoDBTokenStore` key format, `BadgerTokenStore` key format, `OBOPipeline` with no UAT → `-32001`, `OBOPipeline` with expired Cognito token + valid refresh, `ConnectHandler` with unknown provider → 404
+  - [x] 12.12 Write unit tests for OBO components: `EncryptedTokenStore` with mock KMS errors, `DynamoDBTokenStore` key format, `BadgerTokenStore` key format, `OBOPipeline` with no UAT → `-32001`, `OBOPipeline` with expired Cognito token + valid refresh, `ConnectHandler` with unknown provider → 404
     - _Requirements: 11.5, 11.6, 12.3, 12.4, 13.6_
-  - [ ] 12.13 Write integration tests for OBO components (build tag `integration`): `DynamoDBTokenStore` round-trip against LocalStack, `EncryptedTokenStore` round-trip against LocalStack KMS, `ConnectHandler` end-to-end with mock OAuth2 provider, `RefreshTransport` 401-retry against mock backend
+  - [x] 12.13 Write integration tests for OBO components (build tag `integration`): `DynamoDBTokenStore` round-trip against LocalStack, `EncryptedTokenStore` round-trip against LocalStack KMS, `ConnectHandler` end-to-end with mock OAuth2 provider, `RefreshTransport` 401-retry against mock backend
     - _Requirements: 11.3, 13.1, 12.5_
 
-- [ ] 13. Checkpoint — Ensure all tests pass
+- [x] 13. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. Phase 12 — AWS Deployment
-  - [ ] 14.1 Write `Dockerfile`: multi-stage build (Go builder → minimal runtime image), copy binary and `/config/` directory, expose `PORT`
+- [x] 14. Phase 12 — AWS Deployment
+  - [x] 14.1 Write `Dockerfile`: multi-stage build (Go builder → minimal runtime image), copy binary and `/config/` directory, expose `PORT`
     - _Requirements: 9.3, 9.5_
-  - [ ] 14.2 Write IAM policy document (JSON) granting the App Runner service role minimum permissions: `kms:Sign`, `kms:GetPublicKey`, `kms:DescribeKey` (signing key); `kms:GenerateDataKey`, `kms:Decrypt` (encryption key); `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:DeleteItem` (token table); `secretsmanager:GetSecretValue` (scoped to `abaris/*`)
+  - [x] 14.2 Write IAM policy document (JSON) granting the App Runner service role minimum permissions: `kms:Sign`, `kms:GetPublicKey`, `kms:DescribeKey` (signing key); `kms:GenerateDataKey`, `kms:Decrypt` (encryption key); `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:DeleteItem` (token table); `secretsmanager:GetSecretValue` (scoped to `abaris/*`)
     - _Requirements: 9.6, 11.3, 15.2_
-  - [ ] 14.3 Write CloudWatch log group configuration (e.g., CDK/CloudFormation snippet or `aws logs` CLI commands) for App Runner log forwarding
+  - [x] 14.3 Write CloudWatch log group configuration (e.g., CDK/CloudFormation snippet or `aws logs` CLI commands) for App Runner log forwarding
     - _Requirements: 9.3_
-  - [ ] 14.4 Write production-ready sample config files (`config/identity.yaml` with `secondary_providers` and `token_store` sections, `config/routing.yaml` with `obo_provider` on OBO routes, `config/policies/developers.yaml`, `config/policies/read-only.yaml`) with all sections populated, suitable for use as a deployment template
+  - [x] 14.4 Write production-ready sample config files (`config/identity.yaml` with `secondary_providers` and `token_store` sections, `config/routing.yaml` with `obo_provider` on OBO routes, `config/policies/developers.yaml`, `config/policies/read-only.yaml`) with all sections populated, suitable for use as a deployment template
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 10.1, 15.1_
-  - [ ] 14.5 Write `cmd/abaris/main.go` composition root: instantiate `config.Loader`, call `Load()`, resolve secondary provider secrets, start `Watch(ctx)` goroutine, fetch secrets, wire all adapters (SSE, Stdio, OIDCAdapter, SAMLAdapter, OPAPolicyAdapter, KMSMinter, EncryptedTokenStore, OBOPipeline, RefreshTransport, ConnectHandler, SecretsManagerAdapter, slog Logger), start transports, register `/health`, `/.well-known/jwks.json`, `/connect/{provider}`, and `/connect/{provider}/callback` handlers, block on signals
+  - [x] 14.5 Write `cmd/abaris/main.go` composition root: instantiate `config.Loader`, call `Load()`, resolve secondary provider secrets, start `Watch(ctx)` goroutine, fetch secrets, wire all adapters (SSE, Stdio, OIDCAdapter, SAMLAdapter, OPAPolicyAdapter, KMSMinter, EncryptedTokenStore, OBOPipeline, RefreshTransport, ConnectHandler, SecretsManagerAdapter, slog Logger), start transports, register `/health`, `/.well-known/jwks.json`, `/connect/{provider}`, and `/connect/{provider}/callback` handlers, block on signals
     - _Requirements: 8.7, 9.1, 9.4, 9.5, 12.1, 13.1_
 
-- [ ] 15. Final Checkpoint — Ensure all tests pass
+- [x] 15. Final Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ---

@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudWatch log group and App Runner observability configuration for Abaris
+
+Parameters:
+  AppName:
+    Type: String
+    Default: abaris
+    Description: Application name used as the log group name suffix and resource tag value.
+
+  RetentionDays:
+    Type: Number
+    Default: 90
+    Description: Number of days to retain log events before they expire.
+    AllowedValues:
+      - 1
+      - 3
+      - 5
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 120
+      - 150
+      - 180
+      - 365
+      - 400
+      - 545
+      - 731
+      - 1827
+      - 3653
+
+Resources:
+  # Pre-create the log group so retention is enforced from day one.
+  # App Runner writes stdout/stderr to:
+  #   /aws/apprunner/<service-name>/<service-id>/application  (stdout — Abaris JSON logs)
+  #   /aws/apprunner/<service-name>/<service-id>/system       (App Runner platform events)
+  AbarisLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/apprunner/${AppName}"
+      RetentionInDays: !Ref RetentionDays
+      Tags:
+        - Key: app
+          Value: !Ref AppName
+        - Key: managed-by
+          Value: cloudformation
+
+  # Optional: X-Ray tracing for App Runner.
+  # Reference the output ARN in your App Runner service's ObservabilityConfiguration.
+  AbarisObservabilityConfig:
+    Type: AWS::AppRunner::ObservabilityConfiguration
+    Properties:
+      ObservabilityConfigurationName: !Sub "${AppName}-observability"
+      TraceConfiguration:
+        Vendor: AWSXRAY
+      Tags:
+        - Key: app
+          Value: !Ref AppName
+
+Outputs:
+  LogGroupName:
+    Description: CloudWatch log group name for Abaris App Runner logs
+    Value: !Sub "/aws/apprunner/${AppName}"
+    Export:
+      Name: !Sub "${AppName}-log-group-name"
+
+  ObservabilityConfigArn:
+    Description: >
+      ARN of the App Runner observability configuration.
+      Reference this in your App Runner service resource under
+      ObservabilityConfiguration.ObservabilityConfigurationArn.
+    Value: !GetAtt AbarisObservabilityConfig.ObservabilityConfigurationArn
+    Export:
+      Name: !Sub "${AppName}-observability-config-arn"

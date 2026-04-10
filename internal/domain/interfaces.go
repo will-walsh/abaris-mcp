@@ -52,3 +52,19 @@ type Logger interface {
 	Error(msg string, args ...any)
 	Debug(msg string, args ...any)
 }
+
+// TokenStore persists encrypted Token_Pairs per user per provider.
+// The primary key is the Cognito sub claim (IdentityContext.UserID).
+// Implementations must encrypt token values at rest using KMS envelope encryption.
+type TokenStore interface {
+	// Get retrieves and decrypts the TokenPair for the given user and provider.
+	// Returns ErrNotConnected if no pair exists for this user+provider combination.
+	Get(ctx context.Context, userID, provider string) (TokenPair, error)
+
+	// Save encrypts and persists the TokenPair for the given user and provider.
+	Save(ctx context.Context, userID, provider string, pair TokenPair) error
+
+	// Delete removes the TokenPair for the given user and provider.
+	// Returns nil if the pair does not exist (idempotent).
+	Delete(ctx context.Context, userID, provider string) error
+}

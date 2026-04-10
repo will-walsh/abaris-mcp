@@ -90,10 +90,11 @@ func New(cfg Config, logger domain.Logger) (*SAMLAdapter, error) {
 	}
 
 	sp := &saml.ServiceProvider{
-		EntityID:    cfg.SPEntityID,
-		MetadataURL: *metaURL,
-		AcsURL:      *acsURL,
-		IDPMetadata: idpMeta,
+		EntityID:         cfg.SPEntityID,
+		MetadataURL:      *metaURL,
+		AcsURL:           *acsURL,
+		IDPMetadata:      idpMeta,
+		AllowIDPInitiated: true,
 	}
 
 	if keyPair != nil {

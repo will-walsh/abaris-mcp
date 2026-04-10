@@ -28,6 +28,11 @@ var (
 	// ErrNoRoute is returned when no route prefix matches the requested tool name.
 	// Maps to JSON-RPC error code -32602.
 	ErrNoRoute = errors.New("invalid params: no route configured for tool prefix")
+
+	// ErrNotConnected is returned by TokenStore.Get when no token pair exists
+	// for the given user+provider combination.
+	// Maps to JSON-RPC error code -32001 with message "not connected: use /connect/{provider} to authorize".
+	ErrNotConnected = errors.New("not connected: no token pair found for user+provider")
 )
 
 // JSON-RPC 2.0 error codes used by Proxy_Core when mapping domain errors to

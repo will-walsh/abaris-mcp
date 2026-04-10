@@ -1,7 +1,11 @@
 # config/policies/read-only.yaml
-# Namespace: data["policies/read-only"] / data.policies.read-only (OPA)
 # Owner: Platform / Security team
 # Hot-reloaded — no restart required.
+#
+# Grants the "read-only" group access to read/list/search tools only.
+# denied_tools takes precedence over allowed_tools within the same group,
+# so write and delete operations are blocked even if a future allowed_tools
+# pattern would otherwise match them.
 
 policies:
   - group: read-only
@@ -9,7 +13,17 @@ policies:
       allowed_tools:
         - "github/get-*"
         - "github/list-*"
+        - "github/search-*"
+        - "internal/get-*"
+        - "internal/list-*"
+        - "internal/read-*"
+        - "internal/fetch-*"
       denied_tools:
         - "github/delete-*"
         - "github/create-*"
         - "github/update-*"
+        - "github/patch-*"
+        - "internal/delete-*"
+        - "internal/create-*"
+        - "internal/update-*"
+        - "internal/purge-*"

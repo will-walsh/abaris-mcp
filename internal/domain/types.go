@@ -96,7 +96,9 @@ type IdentityProviderConfig struct {
 
 // IdentityConfig is loaded from config/identity.yaml.
 type IdentityConfig struct {
-	IdentityProviders []IdentityProviderConfig `yaml:"identity_providers" validate:"required,min=1,dive"`
+	IdentityProviders  []IdentityProviderConfig  `yaml:"identity_providers"             validate:"required,min=1,dive"`
+	SecondaryProviders []SecondaryProviderConfig `yaml:"secondary_providers,omitempty"  validate:"omitempty,dive"`
+	TokenStore         *TokenStoreConfig         `yaml:"token_store,omitempty"`
 }
 
 // RoutingConfig is loaded from config/routing.yaml.
@@ -114,8 +116,43 @@ type PolicyFileConfig struct {
 // (identity.yaml / routing.yaml / policies/*.yaml) is an implementation detail
 // of config.Loader; everywhere else in the codebase only Config is used.
 type Config struct {
-	IdentityProviders []IdentityProviderConfig
-	Routes            []RouteEntry
-	Policies          []PolicyEntry
-	Assertion         AssertionConfig
+	IdentityProviders  []IdentityProviderConfig
+	SecondaryProviders []SecondaryProviderConfig
+	TokenStore         *TokenStoreConfig
+	Routes             []RouteEntry
+	Policies           []PolicyEntry
+	Assertion          AssertionConfig
+}
+
+// TokenPair holds an access token and refresh token for a given user+provider.
+type TokenPair struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// SecondaryProviderConfig holds configuration for a secondary OAuth2 provider
+// (e.g. GitHub OAuth App). Loaded from config/identity.yaml secondary_providers section.
+type SecondaryProviderConfig struct {
+	Name            string   `yaml:"name"              validate:"required"`
+	Type            string   `yaml:"type"              validate:"required,oneof=oauth2"`
+	AuthURL         string   `yaml:"auth_url"          validate:"required,url"`
+	TokenURL        string   `yaml:"token_url"         validate:"required,url"`
+	ClientID        string   `yaml:"client_id"         validate:"required"`
+	ClientSecretARN string   `yaml:"client_secret_arn" validate:"required"`
+	Scopes          []string `yaml:"scopes"            validate:"required,min=1"`
+	// ClientSecret is resolved from Secrets Manager at startup; not in YAML.
+	ClientSecret string `yaml:"-"`
+}
+
+// TokenStoreConfig holds configuration for the Token_Store backend.
+// Loaded from config/identity.yaml token_store section.
+type TokenStoreConfig struct {
+	Type string `yaml:"type" validate:"required,oneof=dynamodb badger"`
+	// DynamoDB fields
+	TableName string `yaml:"table_name,omitempty"`
+	Region    string `yaml:"region,omitempty"`
+	// BadgerDB fields
+	DataDir string `yaml:"data_dir,omitempty"`
+	// KMS encryption key ARN (required for both backends)
+	KMSEncryptionKeyARN string `yaml:"kms_encryption_key_arn" validate:"required"`
 }

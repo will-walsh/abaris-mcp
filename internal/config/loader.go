@@ -30,6 +30,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -113,10 +114,16 @@ func (l *Loader) Load() (domain.Config, error) {
 	}
 
 	cfg := domain.Config{
-		IdentityProviders: identityCfg.IdentityProviders,
-		Routes:            routingCfg.Routes,
-		Assertion:         routingCfg.Assertion,
-		Policies:          merged,
+		IdentityProviders:  identityCfg.IdentityProviders,
+		SecondaryProviders: identityCfg.SecondaryProviders,
+		TokenStore:         identityCfg.TokenStore,
+		Routes:             routingCfg.Routes,
+		Assertion:          routingCfg.Assertion,
+		Policies:           merged,
+	}
+
+	if err := validateSecondaryProviders(cfg.SecondaryProviders); err != nil {
+		return domain.Config{}, err
 	}
 
 	// 6. populate Data map under write lock
@@ -368,4 +375,39 @@ func union(a, b []string) []string {
 func isYAML(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
 	return ext == ".yaml" || ext == ".yml"
+}
+
+// SecretsResolver retrieves a secret value by ARN.
+// The production implementation wraps infra.SecretsManagerAdapter.
+type SecretsResolver interface {
+	GetIDPClientSecret(ctx context.Context, secretARN string) (string, error)
+}
+
+// ResolveSecondaryProviderSecrets resolves the client_secret for each secondary
+// provider from Secrets Manager and stores it in the Config.
+// Call this after Load() at startup. Returns an error if any secret is missing.
+func (l *Loader) ResolveSecondaryProviderSecrets(ctx context.Context, resolver SecretsResolver) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := range l.current.SecondaryProviders {
+		p := &l.current.SecondaryProviders[i]
+		secret, err := resolver.GetIDPClientSecret(ctx, p.ClientSecretARN)
+		if err != nil {
+			return fmt.Errorf("secondary_providers[%s]: resolve client_secret_arn: %w", p.Name, err)
+		}
+		p.ClientSecret = secret
+	}
+	return nil
+}
+
+// validateSecondaryProviders checks that all secondary provider names are unique.
+func validateSecondaryProviders(providers []domain.SecondaryProviderConfig) error {
+	seen := make(map[string]struct{}, len(providers))
+	for _, p := range providers {
+		if _, dup := seen[p.Name]; dup {
+			return fmt.Errorf("secondary_providers: duplicate provider name %q", p.Name)
+		}
+		seen[p.Name] = struct{}{}
+	}
+	return nil
 }

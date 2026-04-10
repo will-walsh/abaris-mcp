@@ -1,21 +1,84 @@
 # config/identity.yaml
-# Namespace: data["identity"] / data.identity (OPA)
 # Owner: Platform / Security team
 # Requires restart to change.
 #
-# Cognito User Pool: us-east-1_rJETkEEyh
-# Hosted UI domain: us-east-1rjetkeeyh.auth.us-east-1.amazoncognito.com
-# App Client: abaris-test-idp (6smfttkp2gbfgh4thoh5jeq9og)
+# This file configures:
+#   - identity_providers: the primary OIDC/SAML providers Abaris trusts for
+#     inbound caller authentication.
+#   - secondary_providers: OAuth2 providers used by the OBO pipeline to acquire
+#     per-user downstream tokens (e.g. GitHub OAuth App).
+#   - token_store: the backend used to persist encrypted per-user token pairs.
 #
-# NOTE: Cognito emits group membership in the "cognito:groups" claim.
-# The OIDCAdapter is configured to read from "cognito:groups" directly.
-# No Pre Token Generation Lambda or claim remapping is required.
+# Replace all PLACEHOLDER values before deploying.
 
+# ---------------------------------------------------------------------------
+# Primary identity providers
+# ---------------------------------------------------------------------------
 identity_providers:
   - name: cognito-oidc
     type: oidc
-    discovery_url: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/openid-configuration
-    jwks_endpoint: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/jwks.json
-    client_id: 6smfttkp2gbfgh4thoh5jeq9og
-    audience: 6smfttkp2gbfgh4thoh5jeq9og
+    # Cognito User Pool discovery URL — replace REGION and POOL_ID.
+    discovery_url: https://cognito-idp.REGION.amazonaws.com/POOL_ID/.well-known/openid-configuration
+    jwks_endpoint: https://cognito-idp.REGION.amazonaws.com/POOL_ID/.well-known/jwks.json
+    # App Client ID — used as the expected audience claim.
+    client_id: YOUR_COGNITO_APP_CLIENT_ID
+    audience: YOUR_COGNITO_APP_CLIENT_ID
+    # Cognito emits group membership in "cognito:groups"; no Lambda required.
     groups_claim: "cognito:groups"
+
+  # Uncomment to add a SAML 2.0 provider alongside Cognito.
+  # - name: okta-saml
+  #   type: saml
+  #   metadata_url: https://your-org.okta.com/app/YOUR_APP_ID/sso/saml/metadata
+  #   sp_entity_id: https://abaris.example.com/saml/metadata
+  #   acs_url: https://abaris.example.com/saml/acs
+  #   cert_path: /app/config/saml/sp.crt
+  #   key_path: /app/config/saml/sp.key
+
+# ---------------------------------------------------------------------------
+# Secondary OAuth2 providers (OBO pipeline)
+# ---------------------------------------------------------------------------
+# Each entry describes a downstream OAuth2 authorization server.
+# client_secret_arn must point to a Secrets Manager secret under abaris/*.
+# The secret value must be the raw client secret string.
+secondary_providers:
+  - name: github
+    type: oauth2
+    auth_url: https://github.com/login/oauth/authorize
+    token_url: https://github.com/login/oauth/access_token
+    client_id: YOUR_GITHUB_OAUTH_APP_CLIENT_ID
+    client_secret_arn: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:abaris/github-oauth-client-secret
+    scopes:
+      - repo
+      - read:user
+
+  # Uncomment to add a second secondary provider (e.g. Jira).
+  # - name: jira
+  #   type: oauth2
+  #   auth_url: https://auth.atlassian.com/authorize
+  #   token_url: https://auth.atlassian.com/oauth/token
+  #   client_id: YOUR_JIRA_CLIENT_ID
+  #   client_secret_arn: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:abaris/jira-oauth-client-secret
+  #   scopes:
+  #     - read:jira-work
+  #     - write:jira-work
+
+# ---------------------------------------------------------------------------
+# Token store
+# ---------------------------------------------------------------------------
+# type: dynamodb  — production; requires DYNAMODB_REGION env var.
+# type: badger    — local development only; single-instance, no replication.
+token_store:
+  type: dynamodb
+  # DynamoDB table name — must exist before Abaris starts.
+  # Partition key: user_id (String), Sort key: provider (String).
+  table_name: abaris-token-store
+  region: REGION
+  # KMS symmetric key used for envelope encryption of token pairs at rest.
+  # Must be the same key ARN referenced in the IAM policy KMSEncryptionKeyPermissions.
+  kms_encryption_key_arn: arn:aws:kms:REGION:ACCOUNT_ID:key/YOUR_ENCRYPTION_KEY_ID
+
+  # Uncomment for local development with BadgerDB instead of DynamoDB.
+  # type: badger
+  # data_dir: /tmp/abaris-tokens
+  # kms_encryption_key_arn: arn:aws:kms:REGION:ACCOUNT_ID:key/YOUR_ENCRYPTION_KEY_ID

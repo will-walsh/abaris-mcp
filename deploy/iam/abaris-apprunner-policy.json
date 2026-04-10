@@ -1,0 +1,52 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "KMSSigningKeyPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Sign",
+        "kms:GetPublicKey",
+        "kms:DescribeKey"
+      ],
+      "Resource": "arn:aws:kms:*:*:key/${KMS_SIGNING_KEY_ID}",
+      "Condition": {
+        "StringEquals": {
+          "kms:RequestAlias": "alias/abaris-signing-key"
+        }
+      }
+    },
+    {
+      "Sid": "KMSEncryptionKeyPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "kms:GenerateDataKey",
+        "kms:Decrypt"
+      ],
+      "Resource": "arn:aws:kms:*:*:key/${KMS_ENCRYPTION_KEY_ID}",
+      "Condition": {
+        "StringEquals": {
+          "kms:RequestAlias": "alias/abaris-encryption-key"
+        }
+      }
+    },
+    {
+      "Sid": "DynamoDBTokenTablePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/${DYNAMODB_TOKEN_TABLE_NAME}"
+    },
+    {
+      "Sid": "SecretsManagerPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:*:secret:abaris/*"
+    }
+  ]
+}

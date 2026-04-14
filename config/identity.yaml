@@ -47,7 +47,7 @@ secondary_providers:
     auth_url: https://github.com/login/oauth/authorize
     token_url: https://github.com/login/oauth/access_token
     client_id: Ov23liBMKo8V7OzRieXx
-    client_secret_arn: arn:aws:secretsmanager:us-east-1:722577301340:secret:abaris/github-client-secret
+    client_secret_arn: arn:aws:secretsmanager:us-east-1:722577301340:secret:abaris/github-client-secret-jZQxdo
     scopes:
       - repo
       - read:user

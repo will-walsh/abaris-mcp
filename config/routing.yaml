@@ -38,18 +38,18 @@ routes:
 # ---------------------------------------------------------------------------
 assertion:
   # Issuer claim (iss) in every minted JWT — must be a URL.
-  issuer: https://abaris.example.com
+  # Using ALB DNS name as issuer; update to a custom domain when available.
+  issuer: http://abaris-mcp-proxy-alb-289172346.us-east-1.elb.amazonaws.com
 
   # Audience claim (aud) — the expected audience at backend servers.
-  audience: https://mcp-backends.internal
+  audience: http://abaris-mcp-proxy-alb-289172346.us-east-1.elb.amazonaws.com
 
   # Token lifetime. Backends should reject tokens older than this.
   ttl: 60s
 
-  # ARN of the KMS asymmetric signing key (RSA_2048 or RSA_4096, SIGN_VERIFY).
-  # The private key never leaves KMS; Abaris calls kms:Sign for each token.
-  kms_key_arn: arn:aws:kms:REGION:ACCOUNT_ID:key/YOUR_SIGNING_KEY_ID
+  # ARN of the KMS asymmetric signing key — get from:
+  # aws cloudformation list-exports --query "Exports[?Name=='abaris-compute-RSASigningKeyArn'].Value" --output text
+  kms_key_arn: arn:aws:kms:us-east-1:722577301340:key/a44ef8e6-541f-4150-af37-bcab5bd7e6bb
 
   # Optional key ID embedded in the JWT kid header claim.
-  # Backends use this to select the correct key from the JWKS endpoint.
   signing_key_id: abaris-signing-key-v1

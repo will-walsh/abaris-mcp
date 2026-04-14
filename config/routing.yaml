@@ -39,10 +39,10 @@ routes:
 assertion:
   # Issuer claim (iss) in every minted JWT — must be a URL.
   # Using ALB DNS name as issuer; update to a custom domain when available.
-  issuer: http://abaris-mcp-proxy-alb-289172346.us-east-1.elb.amazonaws.com
+  issuer: http://abaris-mcp-proxy-alb-1194205123.us-east-1.elb.amazonaws.com
 
   # Audience claim (aud) — the expected audience at backend servers.
-  audience: http://abaris-mcp-proxy-alb-289172346.us-east-1.elb.amazonaws.com
+  audience: http://abaris-mcp-proxy-alb-1194205123.us-east-1.elb.amazonaws.com
 
   # Token lifetime. Backends should reject tokens older than this.
   ttl: 60s

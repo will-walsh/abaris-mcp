@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     -o /build/abaris ./cmd/abaris
 
 # Stage 2: Minimal runtime image
-FROM public.ecr.aws/gcr/distroless/static-debian12:nonroot
+FROM public.ecr.aws/distroless/static:nonroot
 
 WORKDIR /app
 

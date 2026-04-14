@@ -9,7 +9,7 @@ Abaris uses a directory-based configuration layout (`/config/`) instead of a sin
 - **Separation of concerns** — identity provider configuration (long-lived, security-sensitive) is separated from routing (infrastructure-owned) and policies (team-owned). Different teams can own different files without merge conflicts.
 - **GitOps sync** — in a GitOps setup, a separate `policies/` repository can be synced into the running container's `/config/policies/` directory by a sidecar or volume mount. Abaris picks up the changes automatically via hot reload, with no restart required.
 
-## The Three-File Split
+## The Three-File Split 
 
 | File | Owner | Change frequency | Requires restart? |
 |---|---|---|---|

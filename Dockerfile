@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM golang:1.26 AS builder
+FROM public.ecr.aws/docker/library/golang:1.26 AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     -o /build/abaris ./cmd/abaris
 
 # Stage 2: Minimal runtime image
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM public.ecr.aws/gcr/distroless/static-debian12:nonroot
 
 WORKDIR /app
 

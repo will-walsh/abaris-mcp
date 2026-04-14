@@ -21,8 +21,8 @@ identity_providers:
     discovery_url: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/openid-configuration
     jwks_endpoint: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/jwks.json
     # App Client ID — used as the expected audience claim.
-    client_id: 6smfttkp2gbfgh4thoh5jeq9og
-    audience: 6smfttkp2gbfgh4thoh5jeq9og
+    client_id: 3qla96v5rrpaqetmi735b9efv4
+    audience: 3qla96v5rrpaqetmi735b9efv4
     # Cognito emits group membership in "cognito:groups"; no Lambda required.
     groups_claim: "cognito:groups"
 

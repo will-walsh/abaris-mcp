@@ -189,6 +189,7 @@ func run(ctx context.Context, logger domain.Logger) error {
 	// 10. Backend transport and credential store
 	// -----------------------------------------------------------------------
 	backendTransport := proxy.NewHTTPBackendTransport(nil, logger)
+	sseBackendTransport := proxy.NewSSEBackendTransport(nil, logger)
 	credStore := newEnvCredentialStore(cfg.Routes, logger)
 
 	// -----------------------------------------------------------------------
@@ -202,12 +203,13 @@ func run(ctx context.Context, logger domain.Logger) error {
 		rt := proxy.NewRefreshTransport(http.DefaultTransport, refresher, logger)
 
 		oboPipeline, err = proxy.NewOBOPipeline(proxy.OBOPipelineConfig{
-			Identity:  identitySvc,
-			Policy:    policyEngine,
-			Store:     tokenStore,
-			Minter:    minter,
-			Transport: rt,
-			Logger:    logger,
+			Identity:     identitySvc,
+			Policy:       policyEngine,
+			Store:        tokenStore,
+			Minter:       minter,
+			Transport:    rt,
+			SSETransport: sseBackendTransport,
+			Logger:       logger,
 		})
 		if err != nil {
 			return fmt.Errorf("wire OBO pipeline: %w", err)
@@ -237,15 +239,16 @@ func run(ctx context.Context, logger domain.Logger) error {
 	// 12. Broker (Proxy_Core)
 	// -----------------------------------------------------------------------
 	broker, err := proxy.NewBroker(proxy.BrokerConfig{
-		Identity:  identitySvc,
-		Policy:    policyEngine,
-		Transport: backendTransport,
-		Minter:    minter,
-		Creds:     credStore,
-		Logger:    logger,
-		Routes:    cfg.Routes,
-		Store:     tokenStore,
-		OBO:       oboPipeline,
+		Identity:     identitySvc,
+		Policy:       policyEngine,
+		Transport:    backendTransport,
+		SSETransport: sseBackendTransport,
+		Minter:       minter,
+		Creds:        credStore,
+		Logger:       logger,
+		Routes:       cfg.Routes,
+		Store:        tokenStore,
+		OBO:          oboPipeline,
 	})
 	if err != nil {
 		return fmt.Errorf("wire Broker: %w", err)

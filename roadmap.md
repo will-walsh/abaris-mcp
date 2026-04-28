@@ -319,6 +319,7 @@ Estimated non-optional task count: **57 tasks** across 11 milestones (including 
 
 | Item | Notes |
 |------|-------|
+| Revisit DynamoDB key naming (PK/SK vs user_id/provider) | Current table uses generic `PK`/`SK` keys; consider migrating to semantic names `user_id`/`provider` for clarity, or document the generic key convention explicitly in the data layer |
 | Full OPA migration | Config namespace model (`config.Data["routing"]`) makes this a lift-and-shift — Rego policies can reference `data.routing` directly |
 | `abaris dryrun` CLI command | Pure function already implemented in M1 — just needs a CLI wrapper |
 | Policy CI validation pipeline | Run `abaris dryrun` against fixture identities on every PR to the policies repo |

@@ -19,7 +19,6 @@ package proxy
 // Thread safety: SSEBackendTransport is safe for concurrent use.
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -46,6 +45,12 @@ func NewSSEBackendTransport(client *http.Client, logger domain.Logger) *SSEBacke
 	}
 	return &SSEBackendTransport{client: client, logger: logger}
 }
+
+// maxSSEResponseSize is the maximum number of bytes read from a backend SSE
+// response body. Protects against memory exhaustion from a malicious or
+// misbehaving backend streaming an unbounded response.
+// 32 MiB is generous for any realistic MCP tool list or tool call response.
+const maxSSEResponseSize = 32 << 20 // 32 MiB
 
 // Forward implements domain.BackendTransport using MCP Streamable HTTP.
 //
@@ -89,7 +94,7 @@ func (t *SSEBackendTransport) Forward(ctx context.Context, backendURL string, ca
 
 	// Plain JSON response — return directly.
 	if strings.Contains(ct, "application/json") {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxSSEResponseSize))
 		if err != nil {
 			return nil, fmt.Errorf("%w: sse backend: read json response: %s", domain.ErrServiceUnavailable, err)
 		}
@@ -98,11 +103,11 @@ func (t *SSEBackendTransport) Forward(ctx context.Context, backendURL string, ca
 
 	// SSE stream — read until we get a "message" event.
 	if strings.Contains(ct, "text/event-stream") {
-		return t.readFirstMessage(resp.Body, backendURL)
+		return t.readFirstMessage(io.LimitReader(resp.Body, maxSSEResponseSize), backendURL)
 	}
 
 	// Unknown content type — try reading as JSON anyway.
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSSEResponseSize))
 	if err != nil {
 		return nil, fmt.Errorf("%w: sse backend: read response: %s", domain.ErrServiceUnavailable, err)
 	}
@@ -111,12 +116,18 @@ func (t *SSEBackendTransport) Forward(ctx context.Context, backendURL string, ca
 
 // readFirstMessage reads an SSE stream and returns the data from the first
 // "message" event (or the first data line if no event type is specified).
+// Reads the full response body rather than using a line scanner, so there is
+// no arbitrary size limit on individual SSE data lines. The caller is
+// responsible for wrapping r with io.LimitReader before calling.
 func (t *SSEBackendTransport) readFirstMessage(r io.Reader, backendURL string) ([]byte, error) {
-	scanner := bufio.NewScanner(r)
-	var eventType string
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: sse backend: read stream from %s: %s", domain.ErrServiceUnavailable, backendURL, err)
+	}
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	var eventType string
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimRight(line, "\r")
 
 		if line == "" {
 			eventType = ""
@@ -134,9 +145,6 @@ func (t *SSEBackendTransport) readFirstMessage(r io.Reader, backendURL string) (
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("%w: sse backend: read stream from %s: %s", domain.ErrServiceUnavailable, backendURL, err)
-	}
 	return nil, fmt.Errorf("%w: sse backend: stream from %s closed without message event", domain.ErrServiceUnavailable, backendURL)
 }
 

@@ -33,14 +33,15 @@ type CredentialStore interface {
 // Broker depends only on domain interfaces — no infrastructure imports.
 // All concrete adapters are wired at the composition root.
 type Broker struct {
-	identity  domain.IdentityService
-	policy    domain.PolicyEngine
-	transport domain.BackendTransport
-	minter    domain.IdentityAssertionMinter
-	creds     CredentialStore
-	logger    domain.Logger
-	routes    []domain.RouteEntry
-	store     domain.TokenStore // optional; used for OBO route discovery
+	identity     domain.IdentityService
+	policy       domain.PolicyEngine
+	transport    domain.BackendTransport    // default HTTP transport
+	sseTransport domain.BackendTransport    // SSE transport for routes with transport: sse
+	minter       domain.IdentityAssertionMinter
+	creds        CredentialStore
+	logger       domain.Logger
+	routes       []domain.RouteEntry
+	store        domain.TokenStore // optional; used for OBO route discovery
 
 	// obo is optional; set when Phase 11 OBO pipeline is wired.
 	// When nil, any route with OBOProvider set returns ErrServiceUnavailable.
@@ -49,14 +50,15 @@ type Broker struct {
 
 // BrokerConfig holds the dependencies for constructing a Broker.
 type BrokerConfig struct {
-	Identity  domain.IdentityService
-	Policy    domain.PolicyEngine
-	Transport domain.BackendTransport
-	Minter    domain.IdentityAssertionMinter
-	Creds     CredentialStore
-	Logger    domain.Logger
-	Routes    []domain.RouteEntry
-	Store     domain.TokenStore // optional; used for OBO route discovery
+	Identity     domain.IdentityService
+	Policy       domain.PolicyEngine
+	Transport    domain.BackendTransport // default HTTP transport
+	SSETransport domain.BackendTransport // optional SSE transport; created automatically if nil
+	Minter       domain.IdentityAssertionMinter
+	Creds        CredentialStore
+	Logger       domain.Logger
+	Routes       []domain.RouteEntry
+	Store        domain.TokenStore // optional; used for OBO route discovery
 	// OBO is optional; leave nil until Phase 11.
 	OBO OBOPipeline
 }
@@ -81,16 +83,21 @@ func NewBroker(cfg BrokerConfig) (*Broker, error) {
 	if cfg.Logger == nil {
 		return nil, fmt.Errorf("broker: Logger is required")
 	}
+	sseTransport := cfg.SSETransport
+	if sseTransport == nil {
+		sseTransport = NewSSEBackendTransport(nil, cfg.Logger)
+	}
 	return &Broker{
-		identity:  cfg.Identity,
-		policy:    cfg.Policy,
-		transport: cfg.Transport,
-		minter:    cfg.Minter,
-		creds:     cfg.Creds,
-		logger:    cfg.Logger,
-		routes:    cfg.Routes,
-		store:     cfg.Store,
-		obo:       cfg.OBO,
+		identity:     cfg.Identity,
+		policy:       cfg.Policy,
+		transport:    cfg.Transport,
+		sseTransport: sseTransport,
+		minter:       cfg.Minter,
+		creds:        cfg.Creds,
+		logger:       cfg.Logger,
+		routes:       cfg.Routes,
+		store:        cfg.Store,
+		obo:          cfg.OBO,
 	}, nil
 }
 
@@ -210,7 +217,7 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 			ID:      1,
 			Method:  "tools/list",
 		}
-		respBytes, err := b.transport.Forward(credCtx, route.BackendURI, listCall, "")
+		respBytes, err := b.transportFor(route).Forward(credCtx, route.BackendURI, listCall, "")
 		if err != nil {
 			b.logger.Warn("aggregateTools: skipping backend, forward failed", "backend", route.BackendURI, "error", err)
 			continue
@@ -368,7 +375,7 @@ func (b *Broker) handleStandard(
 
 	// Forward using the assertion token as the X-Abaris-Identity header value.
 	// The BackendTransport retrieves the service credential from context.
-	respBytes, err := b.transport.Forward(ctx, route.BackendURI, call, assertionToken)
+	respBytes, err := b.transportFor(route).Forward(ctx, route.BackendURI, call, assertionToken)
 	if err != nil {
 		b.logger.Error("broker: backend forward failed",
 			"request_id", requestID, "backend_uri", route.BackendURI, "error", err)
@@ -403,6 +410,15 @@ func (b *Broker) resolveRoute(toolName string) (domain.RouteEntry, error) {
 		}
 	}
 	return domain.RouteEntry{}, fmt.Errorf("%w: %q", domain.ErrNoRoute, prefix)
+}
+
+// transportFor returns the appropriate BackendTransport for the given route.
+// Routes with transport: "sse" use the SSE backend transport; all others use HTTP.
+func (b *Broker) transportFor(route domain.RouteEntry) domain.BackendTransport {
+	if route.Transport == "sse" {
+		return b.sseTransport
+	}
+	return b.transport
 }
 
 // ---------------------------------------------------------------------------

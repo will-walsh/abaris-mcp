@@ -59,10 +59,13 @@ type PolicyEntry struct {
 // RouteEntry maps a tool-name prefix to a backend MCP server URI.
 // OBOProvider, when non-empty, activates the OBO pipeline for this route
 // (Phase 11). For Phase 6 (standard routes) it is always empty.
+// Transport selects the backend transport protocol: "http" (default) or "sse".
+// Use "sse" for backends that speak the MCP SSE protocol (e.g. api.githubcopilot.com/mcp/).
 type RouteEntry struct {
 	Prefix      string `yaml:"prefix"                  validate:"required"`
 	BackendURI  string `yaml:"backend_uri"             validate:"required,url"`
 	OBOProvider string `yaml:"obo_provider,omitempty"` // name of a SecondaryProviderConfig; empty = standard flow
+	Transport   string `yaml:"transport,omitempty"`    // "http" (default) or "sse"
 }
 
 // AssertionConfig holds configuration for Identity Assertion Token minting.

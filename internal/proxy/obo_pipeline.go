@@ -37,6 +37,7 @@ type OBOPipelineImpl struct {
 	minter           domain.IdentityAssertionMinter
 	cognitoRefresher CognitoRefresher
 	transport        http.RoundTripper
+	sseTransport     domain.BackendTransport // used for routes with transport: "sse"
 	logger           domain.Logger
 }
 
@@ -51,6 +52,7 @@ type OBOPipelineConfig struct {
 	Minter           domain.IdentityAssertionMinter
 	CognitoRefresher CognitoRefresher
 	Transport        http.RoundTripper
+	SSETransport     domain.BackendTransport // optional; used for routes with transport: "sse"
 	Logger           domain.Logger
 }
 
@@ -81,6 +83,7 @@ func NewOBOPipeline(cfg OBOPipelineConfig) (*OBOPipelineImpl, error) {
 		minter:           cfg.Minter,
 		cognitoRefresher: cfg.CognitoRefresher,
 		transport:        cfg.Transport,
+		sseTransport:     cfg.SSETransport,
 		logger:           cfg.Logger,
 	}, nil
 }
@@ -124,6 +127,14 @@ func (p *OBOPipelineImpl) Execute(ctx context.Context, call domain.ToolCall, rou
 
 	// Build the outbound request with UAT + X-Abaris-Assertion.
 	// The caller's raw Cognito token is NOT forwarded.
+
+	// For SSE-transport routes, delegate to the SSE backend transport which
+	// handles the two-phase MCP SSE handshake (GET stream → POST message).
+	if route.Transport == "sse" && p.sseTransport != nil {
+		ctx = WithServiceCredential(ctx, uat.AccessToken)
+		return p.sseTransport.Forward(ctx, route.BackendURI, call, assertionToken)
+	}
+
 	reqBody, err := json.Marshal(call)
 	if err != nil {
 		return nil, fmt.Errorf("obo: marshal call: %w", err)

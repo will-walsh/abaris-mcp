@@ -18,9 +18,12 @@ routes:
   # OBO route — Abaris retrieves the caller's GitHub UAT from the Token Store
   # and forwards it as Authorization: Bearer <UAT> + X-Abaris-Assertion.
   # obo_provider must match a name in identity.yaml secondary_providers.
+  # transport: sse — GitHub Copilot MCP uses the SSE protocol (GET to open
+  # stream, POST to send JSON-RPC, response arrives as SSE "message" event).
   - prefix: github
     backend_uri: https://api.githubcopilot.com/mcp/
     obo_provider: github
+    transport: sse
 
   # Standard route — Abaris uses its own service credentials.
   # The service credential secret ARN is resolved at startup from

@@ -154,17 +154,33 @@ func (a *OPAPolicyAdapter) Evaluate(ctx context.Context, identity domain.Identit
 		DeniedTools:  denied,
 	}
 
+	a.logger.Debug("policy: evaluating",
+		"tool", toolName,
+		"operation", operation,
+		"groups", identity.Groups,
+		"allowed_patterns", allowed,
+		"denied_patterns", denied,
+	)
+
 	rs, err := a.evalQuery(ctx, input)
 	if err != nil {
 		return domain.PolicyDecision{}, fmt.Errorf("%w: %s", domain.ErrServiceUnavailable, err)
 	}
 
-	return decisionFromResultSet(rs), nil
+	decision := decisionFromResultSet(rs)
+	a.logger.Debug("policy: decision",
+		"tool", toolName,
+		"permitted", decision.Permitted,
+		"matched_rule", decision.MatchedRuleID,
+		"denial_reason", decision.DenialReason,
+	)
+	return decision, nil
 }
 
 // FilterTools implements domain.PolicyEngine — returns the subset of toolNames
 // permitted for the given identity (used by the Discovery / list_tools flow).
 func (a *OPAPolicyAdapter) FilterTools(ctx context.Context, identity domain.IdentityContext, toolNames []string) ([]string, error) {
+	a.logger.Debug("policy: FilterTools called", "user_id", identity.UserID, "groups", identity.Groups, "tool_count", len(toolNames))
 	permitted := make([]string, 0, len(toolNames))
 	for _, name := range toolNames {
 		call := domain.ToolCall{
@@ -178,8 +194,11 @@ func (a *OPAPolicyAdapter) FilterTools(ctx context.Context, identity domain.Iden
 		}
 		if decision.Permitted {
 			permitted = append(permitted, name)
+		} else {
+			a.logger.Debug("policy: tool denied", "tool", name, "reason", decision.DenialReason)
 		}
 	}
+	a.logger.Debug("policy: FilterTools complete", "user_id", identity.UserID, "permitted_count", len(permitted))
 	return permitted, nil
 }
 

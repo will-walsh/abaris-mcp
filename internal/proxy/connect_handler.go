@@ -144,8 +144,11 @@ func (h *ConnectHandler) ServeConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Inject credentials from HTTP request into context before resolving identity.
+	ctx := injectCredentialsFromHTTP(r.Context(), r)
+
 	// Validate Cognito Bearer token.
-	identity, err := h.identity.Resolve(r.Context())
+	identity, err := h.identity.Resolve(ctx)
 	if err != nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return

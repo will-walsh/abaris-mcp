@@ -158,6 +158,12 @@ func (b *Broker) handleDiscovery(ctx context.Context, call domain.ToolCall, tran
 
 	b.logToolCall(requestID, identity.UserID, "tools/list", transportType)
 
+	b.logger.Debug("broker: discovery: identity resolved",
+		"request_id", requestID,
+		"user_id", identity.UserID,
+		"groups", identity.Groups,
+	)
+
 	// Aggregate tool lists from all backends using service credentials.
 	allTools, err := b.aggregateTools(ctx)
 	if err != nil {
@@ -176,6 +182,13 @@ func (b *Broker) handleDiscovery(ctx context.Context, call domain.ToolCall, tran
 			"service unavailable: policy engine error")
 	}
 
+	b.logger.Debug("broker: discovery: filter complete",
+		"request_id", requestID,
+		"user_id", identity.UserID,
+		"total_tools", len(allTools),
+		"permitted_tools", len(permitted),
+	)
+
 	return SuccessResponse(call.ID, map[string]any{"tools": permitted})
 }
 
@@ -193,6 +206,8 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 		}
 	}
 
+	b.logger.Debug("broker: aggregateTools: starting", "route_count", len(b.routes))
+
 	for _, route := range b.routes {
 		var credCtx context.Context
 
@@ -203,6 +218,7 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 				b.logger.Warn("aggregateTools: skipping OBO backend, no UAT", "prefix", route.Prefix, "provider", route.OBOProvider)
 				continue
 			}
+			b.logger.Debug("broker: aggregateTools: using OBO UAT", "prefix", route.Prefix, "provider", route.OBOProvider)
 			credCtx = WithServiceCredential(ctx, pair.AccessToken)
 		} else {
 			// Standard route: use service credentials.
@@ -211,6 +227,7 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 				b.logger.Warn("aggregateTools: skipping backend, no service credential", "prefix", route.Prefix, "error", err)
 				continue
 			}
+			b.logger.Debug("broker: aggregateTools: using service credential", "prefix", route.Prefix)
 			credCtx = WithServiceCredential(ctx, cred)
 		}
 
@@ -234,6 +251,9 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 		if len(tools) == 0 {
 			b.logger.Warn("aggregateTools: backend returned zero tools", "backend", route.BackendURI, "response_preview", previewBytes(respBytes, 512))
 		}
+
+		b.logger.Debug("broker: aggregateTools: backend returned tools", "backend", route.BackendURI, "count", len(tools))
+
 		for _, t := range tools {
 			// Prefix the tool name with the route prefix so policy patterns
 			// like "github/*" match tools returned by the GitHub backend.

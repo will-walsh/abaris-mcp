@@ -109,7 +109,7 @@ func (t *SSEBackendTransport) initialize(ctx context.Context, backendURL, cred, 
 			domain.ErrServiceUnavailable, initResp.Error.Code, initResp.Error.Message)
 	}
 
-	t.logger.Info("sse backend: initialize succeeded",
+	t.logger.Debug("sse backend: initialize succeeded",
 		"backend", backendURL,
 		"session_id", respHeader.Get("Mcp-Session-Id"),
 		"response_preview", previewString(string(respBytes), 256),
@@ -132,7 +132,7 @@ func (t *SSEBackendTransport) send(ctx context.Context, backendURL string, call 
 		}
 		respBytes, _, _, err = t.post(ctx, backendURL, call, cred, identityToken, newSessionID)
 	}
-	t.logger.Info("sse backend: send response",
+	t.logger.Debug("sse backend: send response",
 		"backend", backendURL,
 		"method", call.Method,
 		"response_preview", previewString(string(respBytes), 512),

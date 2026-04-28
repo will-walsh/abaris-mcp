@@ -19,7 +19,7 @@ routes:
   # and forwards it as Authorization: Bearer <UAT> + X-Abaris-Assertion.
   # obo_provider must match a name in identity.yaml secondary_providers.
   - prefix: github
-    backend_uri: http://github-mcp-server:8080
+    backend_uri: https://api.githubcopilot.com/mcp/
     obo_provider: github
 
   # Standard route — Abaris uses its own service credentials.

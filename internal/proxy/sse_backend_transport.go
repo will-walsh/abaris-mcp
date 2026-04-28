@@ -109,6 +109,12 @@ func (t *SSEBackendTransport) initialize(ctx context.Context, backendURL, cred, 
 			domain.ErrServiceUnavailable, initResp.Error.Code, initResp.Error.Message)
 	}
 
+	t.logger.Info("sse backend: initialize succeeded",
+		"backend", backendURL,
+		"session_id", respHeader.Get("Mcp-Session-Id"),
+		"response_preview", previewString(string(respBytes), 256),
+	)
+
 	return respHeader.Get("Mcp-Session-Id"), nil
 }
 
@@ -126,6 +132,11 @@ func (t *SSEBackendTransport) send(ctx context.Context, backendURL string, call 
 		}
 		respBytes, _, _, err = t.post(ctx, backendURL, call, cred, identityToken, newSessionID)
 	}
+	t.logger.Info("sse backend: send response",
+		"backend", backendURL,
+		"method", call.Method,
+		"response_preview", previewString(string(respBytes), 512),
+	)
 	return respBytes, err
 }
 
@@ -214,3 +225,11 @@ func (t *SSEBackendTransport) readFirstMessage(r io.Reader, backendURL string) (
 
 // Compile-time interface check.
 var _ domain.BackendTransport = (*SSEBackendTransport)(nil)
+
+// previewString returns up to n characters of s, appending "..." if truncated.
+func previewString(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}

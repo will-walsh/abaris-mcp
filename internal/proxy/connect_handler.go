@@ -233,7 +233,7 @@ func (h *ConnectHandler) ServeCallback(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: token.RefreshToken,
 	}
 	if err := h.store.Save(r.Context(), payload.UserID, providerName, pair); err != nil {
-		h.logger.Error("connect: save token pair failed", "provider", providerName, "user_id", payload.UserID)
+		h.logger.Error("connect: save token pair failed", "provider", providerName, "user_id", payload.UserID, "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

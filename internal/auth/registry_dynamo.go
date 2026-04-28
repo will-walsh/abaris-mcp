@@ -19,7 +19,7 @@ type DynamoDBClient interface {
 }
 
 // DynamoDBTokenStore implements domain.TokenStore using AWS DynamoDB.
-// Partition key: "user_id" (string), Sort key: "provider" (string).
+// Partition key: "PK" (string), Sort key: "SK" (string).
 // The token pair is stored as a JSON string in the "token_pair" attribute.
 type DynamoDBTokenStore struct {
 	client    DynamoDBClient
@@ -41,8 +41,8 @@ func (s *DynamoDBTokenStore) Get(ctx context.Context, userID, provider string) (
 	out, err := s.client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(s.tableName),
 		Key: map[string]types.AttributeValue{
-			"user_id":  &types.AttributeValueMemberS{Value: userID},
-			"provider": &types.AttributeValueMemberS{Value: provider},
+			"PK": &types.AttributeValueMemberS{Value: userID},
+			"SK": &types.AttributeValueMemberS{Value: provider},
 		},
 	})
 	if err != nil {
@@ -78,8 +78,8 @@ func (s *DynamoDBTokenStore) Save(ctx context.Context, userID, provider string, 
 	_, err = s.client.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(s.tableName),
 		Item: map[string]types.AttributeValue{
-			"user_id":    &types.AttributeValueMemberS{Value: userID},
-			"provider":   &types.AttributeValueMemberS{Value: provider},
+			"PK":         &types.AttributeValueMemberS{Value: userID},
+			"SK":         &types.AttributeValueMemberS{Value: provider},
 			"token_pair": &types.AttributeValueMemberS{Value: string(pairJSON)},
 		},
 	})
@@ -94,8 +94,8 @@ func (s *DynamoDBTokenStore) Delete(ctx context.Context, userID, provider string
 	_, err := s.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(s.tableName),
 		Key: map[string]types.AttributeValue{
-			"user_id":  &types.AttributeValueMemberS{Value: userID},
-			"provider": &types.AttributeValueMemberS{Value: provider},
+			"PK": &types.AttributeValueMemberS{Value: userID},
+			"SK": &types.AttributeValueMemberS{Value: provider},
 		},
 	})
 	if err != nil {

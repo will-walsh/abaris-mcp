@@ -24,6 +24,9 @@ COPY --from=builder /build/abaris /app/abaris
 # Copy the config directory (identity.yaml, routing.yaml, policies/)
 COPY --from=builder /build/config /app/config
 
+# Copy the OPA Rego bundle
+COPY --from=builder /build/policies /app/policies
+
 # App Runner / ECS inject PORT at runtime; default to 8080 for local runs
 ENV PORT=8080
 EXPOSE 8080

@@ -233,7 +233,6 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 		if len(tools) == 0 {
 			b.logger.Warn("aggregateTools: backend returned zero tools", "backend", route.BackendURI, "response_preview", previewBytes(respBytes, 512))
 		}
-
 		for _, t := range tools {
 			if _, dup := seen[t]; !dup {
 				seen[t] = struct{}{}

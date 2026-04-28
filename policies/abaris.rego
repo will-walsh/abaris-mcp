@@ -31,13 +31,24 @@ default matched_rule := ""
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Known operation types — deny-by-default for unknown (Requirement 3.7)
+# Known operation types
 # ---------------------------------------------------------------------------
 
 known_operations := {"read", "write", "delete"}
 
 operation_known if {
 	known_operations[input.operation]
+}
+
+# Operation is considered "known" for policy purposes when it is either a
+# recognised type OR empty (empty means the caller is doing discovery /
+# list_tools, where operation type is not applicable).
+operation_acceptable if {
+	operation_known
+}
+
+operation_acceptable if {
+	input.operation == ""
 }
 
 # ---------------------------------------------------------------------------
@@ -79,7 +90,7 @@ tool_denied if {
 # ---------------------------------------------------------------------------
 
 allow if {
-	operation_known
+	operation_acceptable
 	not tool_denied
 	some i
 	entry := data.policies[i]
@@ -104,7 +115,6 @@ matched_rule := rule_id if {
 	not tool_denied
 	rule_id := concat(" -> ", [entry.group, pattern])
 }
-
 # ---------------------------------------------------------------------------
 # deny_reason — specific denial messages
 # ---------------------------------------------------------------------------
@@ -112,7 +122,7 @@ matched_rule := rule_id if {
 # Unknown operation type — deny by default (Requirement 3.7)
 deny_reason := "unauthorized: unknown operation type; deny-by-default applied" if {
 	not allow
-	not operation_known
+	not operation_acceptable
 }
 
 # Read-only group: deny write/delete operations (Requirement 3.3)

@@ -2,17 +2,13 @@
 # Owner: Developer team
 # Hot-reloaded — no restart required.
 #
-# Grants the "developers" group full access to all tools on the github and
-# internal backends. Add more allowed_tools patterns as new backends are
-# onboarded. Use denied_tools to carve out exceptions within an allowed glob.
+# Read-only access: permits only get/list/search operations on github tools.
+# To restore full access, change allowed_tools back to ["github/*", "internal/*"].
 
 policies:
   - group: developers
     reduced_scope:
       allowed_tools:
-        - "github/*"
-        - "internal/*"
-      # Uncomment to block destructive operations even for developers:
-      # denied_tools:
-      #   - "github/delete-*"
-      #   - "internal/purge-*"
+        - "github/get_*"
+        - "github/list_*"
+        - "github/search_*"

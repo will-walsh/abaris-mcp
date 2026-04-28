@@ -158,6 +158,12 @@ func (b *Broker) handleDiscovery(ctx context.Context, call domain.ToolCall, tran
 
 	b.logToolCall(requestID, identity.UserID, "tools/list", transportType)
 
+	b.logger.Info("broker: discovery: identity resolved",
+		"request_id", requestID,
+		"user_id", identity.UserID,
+		"groups", identity.Groups,
+	)
+
 	// Aggregate tool lists from all backends using service credentials.
 	allTools, err := b.aggregateTools(ctx)
 	if err != nil {

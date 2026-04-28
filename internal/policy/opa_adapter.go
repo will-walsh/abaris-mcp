@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -327,6 +328,7 @@ func toolNameAndOperation(call domain.ToolCall) (name, operation string) {
 }
 
 // inferOperation classifies a tool name as "read", "write", "delete", or "".
+// Handles both hyphen-separated (get-file) and underscore-separated (get_file) conventions.
 func inferOperation(toolName string) string {
 	// Strip the backend prefix (e.g. "github/") before matching.
 	short := toolName
@@ -337,22 +339,25 @@ func inferOperation(toolName string) string {
 		}
 	}
 
+	// Normalise underscores to hyphens so both naming conventions match.
+	normalised := strings.ReplaceAll(short, "_", "-")
+
 	readPrefixes := []string{"get-", "list-", "read-", "fetch-", "search-"}
 	writePrefixes := []string{"create-", "update-", "put-", "post-", "patch-", "add-", "set-"}
 	deletePrefixes := []string{"delete-", "remove-", "destroy-", "purge-"}
 
 	for _, pfx := range readPrefixes {
-		if len(short) >= len(pfx) && short[:len(pfx)] == pfx {
+		if strings.HasPrefix(normalised, pfx) {
 			return "read"
 		}
 	}
 	for _, pfx := range writePrefixes {
-		if len(short) >= len(pfx) && short[:len(pfx)] == pfx {
+		if strings.HasPrefix(normalised, pfx) {
 			return "write"
 		}
 	}
 	for _, pfx := range deletePrefixes {
-		if len(short) >= len(pfx) && short[:len(pfx)] == pfx {
+		if strings.HasPrefix(normalised, pfx) {
 			return "delete"
 		}
 	}

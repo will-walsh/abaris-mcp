@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -234,9 +235,16 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 			b.logger.Warn("aggregateTools: backend returned zero tools", "backend", route.BackendURI, "response_preview", previewBytes(respBytes, 512))
 		}
 		for _, t := range tools {
-			if _, dup := seen[t]; !dup {
-				seen[t] = struct{}{}
-				all = append(all, t)
+			// Prefix the tool name with the route prefix so policy patterns
+			// like "github/*" match tools returned by the GitHub backend.
+			// Tools that already contain a "/" are left unchanged.
+			qualified := t
+			if !strings.Contains(t, "/") {
+				qualified = route.Prefix + "/" + t
+			}
+			if _, dup := seen[qualified]; !dup {
+				seen[qualified] = struct{}{}
+				all = append(all, qualified)
 			}
 		}
 	}
@@ -335,10 +343,13 @@ func (b *Broker) handleExecution(ctx context.Context, call domain.ToolCall, tran
 	}
 
 	// Dispatch: OBO pipeline or standard service-credentials path.
+	// Strip the route prefix from the tool name before forwarding — the backend
+	// only knows its own tool names (e.g. "get_file_contents", not "github/get_file_contents").
+	forwardCall := stripPrefixFromCall(call, route.Prefix)
 	if route.OBOProvider != "" {
-		return b.handleOBO(ctx, call, route)
+		return b.handleOBO(ctx, forwardCall, route)
 	}
-	return b.handleStandard(ctx, call, identity, route, requestID)
+	return b.handleStandard(ctx, forwardCall, identity, route, requestID)
 }
 
 // handleStandard executes the standard (non-OBO) forwarding path:
@@ -491,8 +502,42 @@ func requestIDFromCall(call domain.ToolCall) string {
 	return uuid.NewString()
 }
 
-// previewBytes returns up to n bytes of b as a string, safe for logging.
-// Truncates at a valid UTF-8 boundary and appends "..." if truncated.
+// stripPrefixFromCall returns a copy of call with the route prefix stripped
+// from the tool name in Params. For example, "github/get_file_contents" becomes
+// "get_file_contents" before being forwarded to the GitHub backend.
+// If the tool name does not start with "prefix/", the call is returned unchanged.
+func stripPrefixFromCall(call domain.ToolCall, prefix string) domain.ToolCall {
+	if call.Params == nil || prefix == "" {
+		return call
+	}
+	var p map[string]json.RawMessage
+	if err := json.Unmarshal(call.Params, &p); err != nil {
+		return call
+	}
+	nameRaw, ok := p["name"]
+	if !ok {
+		return call
+	}
+	var name string
+	if err := json.Unmarshal(nameRaw, &name); err != nil {
+		return call
+	}
+	stripped := strings.TrimPrefix(name, prefix+"/")
+	if stripped == name {
+		return call // no prefix to strip
+	}
+	newName, _ := json.Marshal(stripped)
+	p["name"] = newName
+	newParams, err := json.Marshal(p)
+	if err != nil {
+		return call
+	}
+	out := call
+	out.Params = newParams
+	return out
+}
+
+// previewBytes returns up to n bytes of b as a string, safe for logging.// Truncates at a valid UTF-8 boundary and appends "..." if truncated.
 func previewBytes(b []byte, n int) string {
 	if len(b) <= n {
 		return string(b)

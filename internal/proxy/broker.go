@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/will-walsh/abaris-mcp/internal/auth/authctx"
@@ -227,6 +228,10 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 		if err != nil {
 			b.logger.Warn("aggregateTools: skipping backend, parse failed", "backend", route.BackendURI, "error", err)
 			continue
+		}
+
+		if len(tools) == 0 {
+			b.logger.Warn("aggregateTools: backend returned zero tools", "backend", route.BackendURI, "response_preview", previewBytes(respBytes, 512))
 		}
 
 		for _, t := range tools {
@@ -485,4 +490,18 @@ func requestIDFromCall(call domain.ToolCall) string {
 		return fmt.Sprintf("%v", call.ID)
 	}
 	return uuid.NewString()
+}
+
+// previewBytes returns up to n bytes of b as a string, safe for logging.
+// Truncates at a valid UTF-8 boundary and appends "..." if truncated.
+func previewBytes(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	// Truncate at a valid UTF-8 boundary.
+	s := b[:n]
+	for !utf8.Valid(s) && len(s) > 0 {
+		s = s[:len(s)-1]
+	}
+	return string(s) + "..."
 }

@@ -40,6 +40,7 @@ type Broker struct {
 	creds     CredentialStore
 	logger    domain.Logger
 	routes    []domain.RouteEntry
+	store     domain.TokenStore // optional; used for OBO route discovery
 
 	// obo is optional; set when Phase 11 OBO pipeline is wired.
 	// When nil, any route with OBOProvider set returns ErrServiceUnavailable.
@@ -55,6 +56,7 @@ type BrokerConfig struct {
 	Creds     CredentialStore
 	Logger    domain.Logger
 	Routes    []domain.RouteEntry
+	Store     domain.TokenStore // optional; used for OBO route discovery
 	// OBO is optional; leave nil until Phase 11.
 	OBO OBOPipeline
 }
@@ -87,6 +89,7 @@ func NewBroker(cfg BrokerConfig) (*Broker, error) {
 		creds:     cfg.Creds,
 		logger:    cfg.Logger,
 		routes:    cfg.Routes,
+		store:     cfg.Store,
 		obo:       cfg.OBO,
 	}, nil
 }
@@ -173,15 +176,34 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 	var all []string
 	seen := make(map[string]struct{})
 
-	for _, route := range b.routes {
-		cred, err := b.creds.GetServiceCredential(ctx, route.Prefix)
-		if err != nil {
-			b.logger.Warn("aggregateTools: skipping backend, no service credential", "prefix", route.Prefix, "error", err)
-			continue
+	// Resolve identity once for OBO routes.
+	var identity *domain.IdentityContext
+	if b.store != nil {
+		if id, err := b.identity.Resolve(ctx); err == nil {
+			identity = &id
 		}
+	}
 
-		// Inject service credential into context for the transport.
-		credCtx := WithServiceCredential(ctx, cred)
+	for _, route := range b.routes {
+		var credCtx context.Context
+
+		if route.OBOProvider != "" && b.store != nil && identity != nil {
+			// OBO route: use the user's UAT from the token store.
+			pair, err := b.store.Get(ctx, identity.UserID, route.OBOProvider)
+			if err != nil {
+				b.logger.Warn("aggregateTools: skipping OBO backend, no UAT", "prefix", route.Prefix, "provider", route.OBOProvider)
+				continue
+			}
+			credCtx = WithServiceCredential(ctx, pair.AccessToken)
+		} else {
+			// Standard route: use service credentials.
+			cred, err := b.creds.GetServiceCredential(ctx, route.Prefix)
+			if err != nil {
+				b.logger.Warn("aggregateTools: skipping backend, no service credential", "prefix", route.Prefix, "error", err)
+				continue
+			}
+			credCtx = WithServiceCredential(ctx, cred)
+		}
 
 		listCall := domain.ToolCall{
 			JSONRPC: "2.0",

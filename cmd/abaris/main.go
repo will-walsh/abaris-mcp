@@ -244,6 +244,7 @@ func run(ctx context.Context, logger domain.Logger) error {
 		Creds:     credStore,
 		Logger:    logger,
 		Routes:    cfg.Routes,
+		Store:     tokenStore,
 		OBO:       oboPipeline,
 	})
 	if err != nil {

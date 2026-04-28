@@ -176,7 +176,8 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 	for _, route := range b.routes {
 		cred, err := b.creds.GetServiceCredential(ctx, route.Prefix)
 		if err != nil {
-			return nil, fmt.Errorf("get service credential for %q: %w", route.Prefix, err)
+			b.logger.Warn("aggregateTools: skipping backend, no service credential", "prefix", route.Prefix, "error", err)
+			continue
 		}
 
 		// Inject service credential into context for the transport.
@@ -189,12 +190,14 @@ func (b *Broker) aggregateTools(ctx context.Context) ([]string, error) {
 		}
 		respBytes, err := b.transport.Forward(credCtx, route.BackendURI, listCall, "")
 		if err != nil {
-			return nil, fmt.Errorf("list tools from backend %q: %w", route.BackendURI, err)
+			b.logger.Warn("aggregateTools: skipping backend, forward failed", "backend", route.BackendURI, "error", err)
+			continue
 		}
 
 		tools, err := parseToolListResponse(respBytes)
 		if err != nil {
-			return nil, fmt.Errorf("parse tool list from backend %q: %w", route.BackendURI, err)
+			b.logger.Warn("aggregateTools: skipping backend, parse failed", "backend", route.BackendURI, "error", err)
+			continue
 		}
 
 		for _, t := range tools {

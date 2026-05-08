@@ -4,14 +4,43 @@ phases:
     commands:
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-8)
+      # Detect whether this commit touches anything outside config/policies/.
+      # If only policy files changed, skip the Docker build and just update the OPA bundle.
+      - CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "unknown")
+      - echo "Changed files $CHANGED"
+      - |
+        POLICY_ONLY=true
+        for f in $CHANGED; do
+          case "$f" in
+            config/policies/*) ;;
+            *) POLICY_ONLY=false; break ;;
+          esac
+        done
+        echo "Policy-only change: $POLICY_ONLY"
   build:
     commands:
-      - docker build -t $ECR_REPO_URI:$IMAGE_TAG -t $ECR_REPO_URI:latest .
+      - |
+        if [ "$POLICY_ONLY" = "true" ]; then
+          echo "Policy-only change detected — skipping Docker build, updating OPA bundle only."
+          curl -Lo /usr/local/bin/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+          chmod +x /usr/local/bin/opa
+          opa build -b policies/ -o bundle.tar.gz
+          aws s3 cp bundle.tar.gz s3://abaris-opa-bundle-${AWS_ACCOUNT_ID}/bundle.tar.gz
+          echo "OPA bundle updated. Container hot-reload will pick this up within 30 seconds."
+          # Write a dummy imagedefinitions.json so the Deploy stage is skipped gracefully.
+          printf '[{"name":"abaris","imageUri":"%s"}]' $(aws ecr describe-images --repository-name abaris-mcp-proxy --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]' --output text | xargs -I{} echo "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/abaris-mcp-proxy:{}") > imagedefinitions.json
+        else
+          echo "Full build triggered."
+          docker build -t $ECR_REPO_URI:$IMAGE_TAG -t $ECR_REPO_URI:latest .
+        fi
   post_build:
     commands:
-      - docker push $ECR_REPO_URI:$IMAGE_TAG
-      - docker push $ECR_REPO_URI:latest
-      - printf '[{"name":"abaris","imageUri":"%s"}]' $ECR_REPO_URI:$IMAGE_TAG > imagedefinitions.json
+      - |
+        if [ "$POLICY_ONLY" != "true" ]; then
+          docker push $ECR_REPO_URI:$IMAGE_TAG
+          docker push $ECR_REPO_URI:latest
+          printf '[{"name":"abaris","imageUri":"%s"}]' $ECR_REPO_URI:$IMAGE_TAG > imagedefinitions.json
+        fi
 artifacts:
   files:
     - imagedefinitions.json

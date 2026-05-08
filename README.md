@@ -386,7 +386,13 @@ internal MCP server and update the `backend_uri` in `config/routing.yaml`, or re
 the `internal` route entirely. The broker handles unreachable backends gracefully
 (skips and continues) so this does not block other routes from working.
 
-**`ABARIS_STATE_KEY_ARN` startup failure**
+**OPA returns `"no policy decision produced"` for every tool (all tools filtered out)**
+
+The `policies/` directory is missing from the Docker image. The Dockerfile must include:
+```dockerfile
+COPY --from=builder /build/policies /app/policies
+```
+Without this, the OPA engine starts with no Rego rules loaded and every evaluation returns an empty result set. Rebuild and redeploy the container after adding this line.
 
 The secret `abaris/state-signing-key` must exist in Secrets Manager before the ECS
 task starts. Create it with Step 6 above before deploying `06b-service`.

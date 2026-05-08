@@ -1,0 +1,333 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Abaris | 04-compute
+  KMS RSA signing key, ECR repository, ECS cluster, CloudWatch log groups,
+  and all IAM roles. Everything lives here so the signing key policy can
+  reference the ECS task role ARN directly — no circular dependencies.
+  Depends on: 03-data (VaultEncryptionKeyArn for task role policy)
+
+Resources:
+
+  # -------------------------------------------------------------------------
+  # KMS — Asymmetric RSA signing key (Identity Assertion JWTs)
+  # Defined here alongside the IAM roles so the key policy and role
+  # are created in the same stack with no chicken-and-egg problem.
+  # -------------------------------------------------------------------------
+  RSASigningKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Abaris asymmetric RSA signing key for Identity Assertion JWTs
+      KeySpec: RSA_2048
+      KeyUsage: SIGN_VERIFY
+      EnableKeyRotation: false   # not supported for asymmetric keys
+      MultiRegion: false
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnableRootAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          # Access for the ECS task role is granted via the IAM role policy below.
+          # The root statement above allows IAM policies to control access to this key,
+          # so no additional principal entry is needed here — and avoids a circular dependency.
+
+  RSASigningKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/abaris-signing-key
+      TargetKeyId: !Ref RSASigningKey
+
+  # -------------------------------------------------------------------------
+  # IAM — ECS Task Execution Role
+  # Used by the ECS agent to pull images from ECR and write logs.
+  # -------------------------------------------------------------------------
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AbarisECSTaskExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # -------------------------------------------------------------------------
+  # IAM — ECS Task Role
+  # Runtime permissions for the Abaris process itself.
+  # References RSASigningKey and VaultEncryptionKey ARNs directly.
+  # -------------------------------------------------------------------------
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AbarisECSTaskRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AbarisTaskPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: KMSSign
+                Effect: Allow
+                Action:
+                  - kms:Sign
+                  - kms:GetPublicKey
+                  - kms:DescribeKey
+                Resource: !GetAtt RSASigningKey.Arn
+
+              - Sid: KMSEncrypt
+                Effect: Allow
+                Action:
+                  - kms:GenerateDataKey
+                  - kms:Decrypt
+                Resource: !ImportValue abaris-data-VaultEncryptionKeyArn
+
+              - Sid: DynamoDB
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                Resource: !ImportValue abaris-data-DynamoDBTableArn
+
+              - Sid: SecretsManager
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:abaris/*"
+
+              - Sid: OPABundleRead
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::abaris-opa-bundle-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::abaris-opa-bundle-${AWS::AccountId}/*"
+
+  # -------------------------------------------------------------------------
+  # IAM — CodeBuild Role
+  # -------------------------------------------------------------------------
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AbarisCodeBuildRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AbarisCodeBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ECRAuth
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: ECRPush
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource: !GetAtt ECRRepository.Arn
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/codebuild/abaris*"
+              - Sid: S3ArtifactReadWrite
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub "arn:aws:s3:::abaris-pipeline-artifacts-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::abaris-pipeline-artifacts-${AWS::AccountId}/*"
+              - Sid: OPABundleWrite
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::abaris-opa-bundle-${AWS::AccountId}/*"
+              - Sid: OPABundleKMS
+                Effect: Allow
+                Action:
+                  - kms:GenerateDataKey
+                  - kms:Decrypt
+                Resource: !ImportValue abaris-data-VaultEncryptionKeyArn
+
+  # -------------------------------------------------------------------------
+  # IAM — CodePipeline Role
+  # -------------------------------------------------------------------------
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AbarisCodePipelineRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AbarisCodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: CodeStarConnection
+                Effect: Allow
+                Action: codestar-connections:UseConnection
+                Resource: "*"
+              - Sid: CodeBuild
+                Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: !Sub "arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/abaris-*"
+              - Sid: ECS
+                Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DescribeTasks
+                  - ecs:ListTasks
+                  - ecs:RegisterTaskDefinition
+                  - ecs:UpdateService
+                Resource: "*"
+              - Sid: PassRoles
+                Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !GetAtt ECSTaskExecutionRole.Arn
+                  - !GetAtt ECSTaskRole.Arn
+              - Sid: S3Artifacts
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !Sub "arn:aws:s3:::abaris-pipeline-artifacts-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::abaris-pipeline-artifacts-${AWS::AccountId}/*"
+
+  # -------------------------------------------------------------------------
+  # ECR — Container image repository
+  # -------------------------------------------------------------------------
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: abaris-mcp-proxy
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  # -------------------------------------------------------------------------
+  # ECS Cluster
+  # -------------------------------------------------------------------------
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: abaris-mcp-proxy
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # -------------------------------------------------------------------------
+  # CloudWatch Log Groups
+  # -------------------------------------------------------------------------
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/abaris-mcp-proxy
+      RetentionInDays: 30
+
+  CodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /codebuild/abaris-mcp-proxy
+      RetentionInDays: 14
+
+Outputs:
+  RSASigningKeyArn:
+    Value: !GetAtt RSASigningKey.Arn
+    Export:
+      Name: abaris-compute-RSASigningKeyArn
+
+  ECSTaskExecutionRoleArn:
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: abaris-compute-ECSTaskExecutionRoleArn
+
+  ECSTaskRoleArn:
+    Value: !GetAtt ECSTaskRole.Arn
+    Export:
+      Name: abaris-compute-ECSTaskRoleArn
+
+  CodeBuildRoleArn:
+    Value: !GetAtt CodeBuildRole.Arn
+    Export:
+      Name: abaris-compute-CodeBuildRoleArn
+
+  CodePipelineRoleArn:
+    Value: !GetAtt CodePipelineRole.Arn
+    Export:
+      Name: abaris-compute-CodePipelineRoleArn
+
+  ECRRepositoryUri:
+    Value: !GetAtt ECRRepository.RepositoryUri
+    Export:
+      Name: abaris-compute-ECRRepositoryUri
+
+  ECSClusterName:
+    Value: !Ref ECSCluster
+    Export:
+      Name: abaris-compute-ECSClusterName
+
+  ECSLogGroupName:
+    Value: !Ref ECSLogGroup
+    Export:
+      Name: abaris-compute-ECSLogGroupName

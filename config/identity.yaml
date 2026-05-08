@@ -18,11 +18,11 @@ identity_providers:
   - name: cognito-oidc
     type: oidc
     # Cognito User Pool discovery URL — replace REGION and POOL_ID.
-    discovery_url: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/openid-configuration
-    jwks_endpoint: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rJETkEEyh/.well-known/jwks.json
+    discovery_url: https://cognito-idp.REGION.amazonaws.com/POOL_ID/.well-known/openid-configuration
+    jwks_endpoint: https://cognito-idp.REGION.amazonaws.com/POOL_ID/.well-known/jwks.json
     # App Client ID — used as the expected audience claim.
-    client_id: 3qla96v5rrpaqetmi735b9efv4
-    audience: 3qla96v5rrpaqetmi735b9efv4
+    client_id: YOUR_COGNITO_APP_CLIENT_ID
+    audience: YOUR_COGNITO_APP_CLIENT_ID
     # Cognito emits group membership in "cognito:groups"; no Lambda required.
     groups_claim: "cognito:groups"
 
@@ -46,8 +46,8 @@ secondary_providers:
     type: oauth2
     auth_url: https://github.com/login/oauth/authorize
     token_url: https://github.com/login/oauth/access_token
-    client_id: Ov23liBMKo8V7OzRieXx
-    client_secret_arn: arn:aws:secretsmanager:us-east-1:722577301340:secret:abaris/github-client-secret-jZQxdo
+    client_id: YOUR_GITHUB_OAUTH_CLIENT_ID
+    client_secret_arn: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:abaris/github-client-secret
     scopes:
       - repo
       - read:user
@@ -76,7 +76,7 @@ token_store:
   region: us-east-1
   # KMS symmetric key used for envelope encryption of token pairs at rest.
   # Must be the same key ARN referenced in the IAM policy KMSEncryptionKeyPermissions.
-  kms_encryption_key_arn: arn:aws:kms:us-east-1:722577301340:key/7ba3c5f3-ae32-4a06-ba22-9c5aac8d032c
+  kms_encryption_key_arn: arn:aws:kms:REGION:ACCOUNT_ID:key/YOUR_ENCRYPTION_KEY_ID
 
   # Uncomment for local development with BadgerDB instead of DynamoDB.
   # type: badger

@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Abaris | 07-policy
+  OPA bundle S3 bucket, bundle packager CodeBuild project, and a staleness alarm.
+  Policy changes (Rego files) are deployed independently of the application.
+  Depends on: 03-data (VaultEncryptionKey for bucket SSE), 04-compute (CodeBuildRole)
+
+Resources:
+
+  # -------------------------------------------------------------------------
+  # S3 — OPA bundle bucket
+  # The OPAPolicyAdapter in internal/policy/opa_adapter.go polls this bucket
+  # on a configurable interval for hot-reload without restarting the service.
+  # -------------------------------------------------------------------------
+  OPABundleBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "abaris-opa-bundle-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !ImportValue abaris-data-VaultEncryptionKeyArn
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldBundleVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  OPABundleBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref OPABundleBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowECSTaskRead
+            Effect: Allow
+            Principal:
+              AWS: !ImportValue abaris-compute-ECSTaskRoleArn
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt OPABundleBucket.Arn
+              - !Sub "${OPABundleBucket.Arn}/*"
+          - Sid: AllowCodeBuildWrite
+            Effect: Allow
+            Principal:
+              AWS: !ImportValue abaris-compute-CodeBuildRoleArn
+            Action:
+              - s3:PutObject
+            Resource: !Sub "${OPABundleBucket.Arn}/*"
+
+  # -------------------------------------------------------------------------
+  # CodeBuild — OPA bundle packager
+  # Runs `opa build` on /policies/ and uploads bundle.tar.gz to S3.
+  # Trigger manually or add as a stage in 05-pipeline after the Docker build.
+  # -------------------------------------------------------------------------
+  OPAPackagerProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: abaris-opa-bundle-packager
+      ServiceRole: !ImportValue abaris-compute-CodeBuildRoleArn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: /codebuild/abaris-mcp-proxy
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: OPA_BUNDLE_BUCKET
+            Value: !Ref OPABundleBucket
+      Source:
+        Type: GITHUB
+        Location: https://github.com/will-walsh/abaris-mcp
+        GitCloneDepth: 1
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              commands:
+                - curl -Lo /usr/local/bin/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+                - chmod +x /usr/local/bin/opa
+            build:
+              commands:
+                - opa build -b policies/ -o bundle.tar.gz
+                - aws s3 cp bundle.tar.gz s3://$OPA_BUNDLE_BUCKET/bundle.tar.gz
+                - echo "OPA bundle uploaded to s3://$OPA_BUNDLE_BUCKET/bundle.tar.gz"
+
+  # -------------------------------------------------------------------------
+  # CloudWatch Alarm — alert if bundle has not been updated in 24 hours
+  # -------------------------------------------------------------------------
+  BundleStalenessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: abaris-opa-bundle-stale
+      AlarmDescription: >
+        The OPA policy bundle has not been updated in 24 hours.
+        This may indicate a packaging pipeline failure.
+      Namespace: AWS/S3
+      MetricName: NumberOfObjects
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref OPABundleBucket
+        - Name: StorageType
+          Value: AllStorageTypes
+      Statistic: Maximum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: breaching
+
+Outputs:
+  OPABundleBucketName:
+    Value: !Ref OPABundleBucket
+    Export:
+      Name: abaris-policy-OPABundleBucketName
+
+  OPABundleS3Uri:
+    Description: S3 URI passed to OPAPolicyAdapter as the bundle source
+    Value: !Sub "s3://${OPABundleBucket}/bundle.tar.gz"
+    Export:
+      Name: abaris-policy-OPABundleS3Uri

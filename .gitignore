@@ -12,8 +12,8 @@ dist/
 coverage.html
 
 # Environment and secrets — never commit these
-.env
-.env.*
+.env.local
+.env.*.local
 *.pem
 *.key
 *.p12

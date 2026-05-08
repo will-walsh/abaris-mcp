@@ -1,0 +1,201 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Abaris | 03-data
+  KMS vault encryption key + DynamoDB token registry.
+  These two resources share the same lifecycle — the key encrypts the table,
+  so they are always deployed and destroyed together.
+  Also provisions the DynamoDB stream audit Lambda.
+  Depends on: (none — self-contained data layer)
+
+Resources:
+
+  # -------------------------------------------------------------------------
+  # KMS — Symmetric AES-256 vault encryption key
+  # Used for: DynamoDB SSE + application-level KMS envelope encryption
+  # of token pairs in EncryptedTokenStore.
+  # -------------------------------------------------------------------------
+  VaultEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Abaris vault encryption key — DynamoDB SSE and token envelope encryption
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      EnableKeyRotation: true
+      MultiRegion: false
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnableRootAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          # ECS task role is granted access in 04-compute once the role exists.
+          # Root access above allows the 04-compute stack to update this key policy
+          # via a CloudFormation custom resource or manual key policy update if needed.
+          # For simplicity, the ECS task role is granted access via an IAM policy
+          # in 04-compute that references this key ARN — no key policy update required.
+
+  VaultEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/abaris-vault-key
+      TargetKeyId: !Ref VaultEncryptionKey
+
+  # -------------------------------------------------------------------------
+  # DynamoDB — AbarisTokenRegistry
+  #
+  # Key design:
+  #   user_id  (partition key): Cognito sub claim  e.g. "1478c478-d011-707f-175f-bfef0d3311ae"
+  #   provider (sort key):      OAuth provider name e.g. "github" | "cognito"
+  #
+  # Item attributes (application-managed, not declared here):
+  #   token_pair  String  — KMS-envelope-encrypted JSON {"access_token":"...","refresh_token":"..."}
+  #   ttl         Number  — Unix timestamp for DynamoDB auto-deletion
+  # -------------------------------------------------------------------------
+  AbarisTokenRegistry:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AbarisTokenRegistry
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref VaultEncryptionKey
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: provider
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: provider
+          KeyType: RANGE
+      # GSI: look up all users connected to a given provider
+      GlobalSecondaryIndexes:
+        - IndexName: ProviderIndex
+          KeySchema:
+            - AttributeName: provider
+              KeyType: HASH
+            - AttributeName: user_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: KEYS_ONLY   # never stream token values
+      Tags:
+        - Key: Service
+          Value: abaris
+        - Key: DataClassification
+          Value: Confidential
+
+  # -------------------------------------------------------------------------
+  # DynamoDB Stream → CloudWatch audit log
+  # Logs only key metadata (PK, SK, event type) — never token values.
+  # -------------------------------------------------------------------------
+  TokenAuditLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /dynamodb/abaris-token-audit
+      RetentionInDays: 90
+
+  StreamProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AbarisTokenStreamProcessorRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBStreamRead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:DescribeStream
+                  - dynamodb:ListStreams
+                Resource: !Sub "${AbarisTokenRegistry.Arn}/stream/*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt TokenAuditLogGroup.Arn
+
+  StreamProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: abaris-token-audit-stream
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt StreamProcessorRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          LOG_GROUP: !Ref TokenAuditLogGroup
+      Code:
+        ZipFile: |
+          import json, boto3, os, time
+          logs = boto3.client('logs')
+          LOG_GROUP = os.environ['LOG_GROUP']
+
+          def handler(event, context):
+              stream = f"audit-{int(time.time())}"
+              try:
+                  logs.create_log_stream(logGroupName=LOG_GROUP, logStreamName=stream)
+              except logs.exceptions.ResourceAlreadyExistsException:
+                  pass
+              entries = []
+              for r in event.get('Records', []):
+                  keys = r['dynamodb'].get('Keys', {})
+                  entries.append({
+                      'timestamp': int(time.time() * 1000),
+                      'message': json.dumps({
+                          'event': r['eventName'],
+                          'pk': keys.get('PK', {}).get('S', ''),
+                          'sk': keys.get('SK', {}).get('S', ''),
+                          'approxTime': r['dynamodb'].get('ApproximateCreationDateTime')
+                      })
+                  })
+              if entries:
+                  logs.put_log_events(logGroupName=LOG_GROUP, logStreamName=stream, logEvents=entries)
+
+  StreamEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt AbarisTokenRegistry.StreamArn
+      FunctionName: !GetAtt StreamProcessorFunction.Arn
+      StartingPosition: LATEST
+      BatchSize: 100
+      BisectBatchOnFunctionError: true
+
+Outputs:
+  VaultEncryptionKeyArn:
+    Value: !GetAtt VaultEncryptionKey.Arn
+    Export:
+      Name: abaris-data-VaultEncryptionKeyArn
+
+  DynamoDBTableName:
+    Value: !Ref AbarisTokenRegistry
+    Export:
+      Name: abaris-data-DynamoDBTableName
+
+  DynamoDBTableArn:
+    Value: !GetAtt AbarisTokenRegistry.Arn
+    Export:
+      Name: abaris-data-DynamoDBTableArn

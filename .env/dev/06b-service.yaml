@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Abaris | 06b-service
+  ECS Task Definition and ECS Service.
+  This is the stack that changes on every release — delete and redeploy freely
+  without touching the ALB or any other infrastructure.
+  Depends on: 01-core, 02-network-security, 03-data, 04-compute, 06-application
+
+Parameters:
+  ContainerPort:
+    Type: Number
+    Default: 8080
+
+  TaskCPU:
+    Type: String
+    Default: "512"
+    AllowedValues: ["256", "512", "1024", "2048", "4096"]
+
+  TaskMemory:
+    Type: String
+    Default: "1024"
+    AllowedValues: ["512", "1024", "2048", "3072", "4096", "5120", "6144", "7168", "8192"]
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+
+Resources:
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: abaris-mcp-proxy
+      Cpu: !Ref TaskCPU
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !ImportValue abaris-compute-ECSTaskExecutionRoleArn
+      TaskRoleArn: !ImportValue abaris-compute-ECSTaskRoleArn
+      ContainerDefinitions:
+        - Name: abaris
+          Image: !Sub
+            - "${ECRUri}:latest"
+            - ECRUri: !ImportValue abaris-compute-ECRRepositoryUri
+          Essential: true
+          StopTimeout: 30
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          Environment:
+            - Name: PORT
+              Value: !Sub "${ContainerPort}"
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: ABARIS_DRAIN_TIMEOUT
+              Value: "10s"
+            - Name: ABARIS_KMS_SIGNING_KEY_ARN
+              Value: !ImportValue abaris-compute-RSASigningKeyArn
+            - Name: ABARIS_KMS_ENCRYPTION_KEY_ARN
+              Value: !ImportValue abaris-data-VaultEncryptionKeyArn
+            - Name: ABARIS_DYNAMODB_TABLE_NAME
+              Value: !ImportValue abaris-data-DynamoDBTableName
+            - Name: ABARIS_DYNAMODB_REGION
+              Value: !Ref AWS::Region
+            - Name: ABARIS_OPA_BUNDLE_URI
+              Value: !Sub "s3://abaris-opa-bundle-${AWS::AccountId}/bundle.tar.gz"
+            - Name: ABARIS_STATE_KEY_ARN
+              Value: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:abaris/state-signing-key"
+            - Name: ABARIS_REDIRECT_URI
+              Value: !Sub
+                - "http://${DNS}"
+                - DNS: !ImportValue abaris-app-ALBDNSName
+            - Name: ABARIS_LOG_LEVEL
+              Value: INFO
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !ImportValue abaris-compute-ECSLogGroupName
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          # No container health check — distroless has no shell.
+          # ALB health check on /health provides liveness signal.
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      ServiceName: abaris-mcp-proxy
+      Cluster: !ImportValue abaris-compute-ECSClusterName
+      TaskDefinition: !Ref ECSTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !ImportValue abaris-core-PrivateSubnetA
+            - !ImportValue abaris-core-PrivateSubnetB
+          SecurityGroups:
+            - !ImportValue abaris-netsec-ECSSecurityGroupId
+      LoadBalancers:
+        - ContainerName: abaris
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !ImportValue abaris-app-ALBTargetGroupArn
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 200
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      HealthCheckGracePeriodSeconds: 120
+
+Outputs:
+  ECSServiceName:
+    Value: !GetAtt ECSService.Name
+    Export:
+      Name: abaris-service-ECSServiceName

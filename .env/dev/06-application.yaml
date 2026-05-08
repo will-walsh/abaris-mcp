@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Abaris | 06-application
+  ALB, target group, listener, and WAF association.
+  Stable infrastructure — only changes when networking config changes.
+  Depends on: 01-core, 02-network-security
+
+Parameters:
+  ContainerPort:
+    Type: Number
+    Default: 8080
+
+Resources:
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: abaris-mcp-proxy-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !ImportValue abaris-core-PublicSubnetA
+        - !ImportValue abaris-core-PublicSubnetB
+      SecurityGroups:
+        - !ImportValue abaris-netsec-ALBSecurityGroupId
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: abaris-mcp-proxy-tg
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !ImportValue abaris-core-VpcId
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  WAFAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: ALB
+    Properties:
+      ResourceArn: !Ref ALB
+      WebACLArn: !ImportValue abaris-netsec-WAFWebACLArn
+
+Outputs:
+  ServiceURL:
+    Description: Public URL of the Abaris MCP Proxy
+    Value: !Sub "http://${ALB.DNSName}"
+    Export:
+      Name: abaris-app-ServiceUrl
+
+  ALBArn:
+    Value: !Ref ALB
+    Export:
+      Name: abaris-app-ALBArn
+
+  ALBDNSName:
+    Value: !GetAtt ALB.DNSName
+    Export:
+      Name: abaris-app-ALBDNSName
+
+  ALBTargetGroupArn:
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: abaris-app-ALBTargetGroupArn
